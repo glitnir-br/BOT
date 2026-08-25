@@ -9,7 +9,7 @@ class Ping(commands.Cog):
     @commands.command()
     async def ping(self, ctx):
         embed = discord.Embed(
-            description=f"🏓 **Pong!** Latência: `{round(self.bot.latency * 1000)}ms`",
+            description=f"🏓 **Pong!!!** Latência: `{round(self.bot.latency * 1000)}ms`",
             color=discord.Color.green(),
         )
         await ctx.reply(embed=embed)
