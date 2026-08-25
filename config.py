@@ -20,13 +20,24 @@ def _int_list_env(nome: str) -> list:
     return [int(item.strip()) for item in valor.split(",") if item.strip()]
 
 
+def _int_env_qualquer(*nomes: str) -> int:
+    """Lê a primeira variável de ambiente encontrada entre vários nomes possíveis."""
+    for nome in nomes:
+        valor = _int_env(nome)
+        if valor:
+            return valor
+    return 0
+
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 DISCORD_ID = _int_env("DISCORD_ID")
 CHAT_GERAL_ID = _int_env("CHAT_GERAL_ID")
 CHAT_VOZ_ID = _int_env("CHAT_VOZ_ID")
 BEM_VINDO_ID = _int_env("BEM_VINDO_ID")
 APRESENTESE_ID = _int_env("APRESENTESE_ID")
-SUPPORT_CATEGORY_ID = _int_env("SUPPORT_CATEGORY_ID")  # categoria fallback se o tipo de ticket não tiver uma própria
+SUPPORT_CATEGORY_ID = _int_env_qualquer("SUPPORT_CATEGORY_ID", "CATEGORIA_SUPORTE_ID")  # categoria fallback se o tipo de ticket não tiver uma própria
+# Alias mantido para compatibilidade com o nome usado no .env atual.
+CATEGORIA_SUPORTE_ID = SUPPORT_CATEGORY_ID
 CARGOS_ADM_ID = _int_list_env("CARGOS_ADM_ID")  # um ou mais cargos que enxergam todo ticket criado
 CARGO_WHITELIST_ID = _int_env("CARGO_WHITELIST_ID")  # cargo concedido ao aprovar um ticket de whitelist
 CANAL_LOG_ID = _int_env("CANAL_LOG_ID")  # log geral (usado como fallback pros dois abaixo, e por outros logs do bot)
