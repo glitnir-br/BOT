@@ -65,7 +65,13 @@ PERGUNTAS = {
     ],
     "Whitelist": [
         {"label": "Nickname usado no jogo:", "max_length": 20},
-        {"label": "Sua SteamID:", "max_length": 50},
+        {
+            "label": "Sua SteamID:",
+            "description": "Digite apenas números, com exatamente 17 caracteres.",
+            "placeholder": "Ex: 76561198000000000",
+            "min_length": 17,
+            "max_length": 17,
+        },
         {"label": "Você já jogou em outra season?", "max_length": 100},
         {"label": "Algum amigo joga no servidor? Se sim, quem?", "style": discord.TextStyle.paragraph, "max_length": 200},
         {"label": "Deixou sua ID Steam pública?", "max_length": 20},
@@ -520,17 +526,31 @@ class CategoriaModal(ui.Modal):
         self.perguntas = PERGUNTAS[categoria]
         self.campos = []
         for pergunta in self.perguntas:
+            usar_label = bool(pergunta.get("description"))
             campo = ui.TextInput(
-                label=pergunta["label"],
+                label=None if usar_label else pergunta.get("label"),
                 style=pergunta.get("style", discord.TextStyle.short),
                 placeholder=pergunta.get("placeholder", ""),
                 max_length=pergunta.get("max_length", 200),
+                min_length=pergunta.get("min_length"),
                 required=pergunta.get("obrigatorio", True),
             )
-            self.add_item(campo)
+            if usar_label:
+                self.add_item(ui.Label(text=pergunta["label"], description=pergunta["description"], component=campo))
+            else:
+                self.add_item(campo)
             self.campos.append(campo)
 
     async def on_submit(self, interaction: discord.Interaction):
+        if self.categoria == "Whitelist":
+            steamid = self.campos[1].value.strip()
+            if not steamid.isdigit() or len(steamid) != 17:
+                await interaction.response.send_message(
+                    "A SteamID da whitelist precisa conter exatamente **17 números**.",
+                    ephemeral=True,
+                )
+                return
+
         await interaction.response.defer(ephemeral=True)
 
         if self.mensagem_para_apagar:
