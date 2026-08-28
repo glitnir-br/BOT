@@ -23,6 +23,7 @@ EXTENSIONS = [
     "cogs.cargos",
     "cogs.anti_spam",
     "cogs.agendados",
+    "cogs.server_status",
 ]
 
 
