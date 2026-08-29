@@ -44,7 +44,6 @@ class ServerStatus(commands.Cog):
                 "nome": info.server_name,
                 "jogadores": info.player_count,
                 "max_jogadores": info.max_players,
-                "ping": round(info.ping * 1000)
             }
 
         except Exception as erro:
@@ -80,11 +79,6 @@ class ServerStatus(commands.Cog):
                 inline=True
             )
 
-            embed.add_field(
-                name="📡 Ping",
-                value=f'**{status["ping"]} ms**',
-                inline=True
-            )
 
         else:
 
