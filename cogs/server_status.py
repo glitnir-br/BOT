@@ -15,6 +15,7 @@ CHANNEL_ID = 1543025024645210303
 # Se deixar 0, o bot cria uma nova e mostra o ID no terminal
 MESSAGE_ID = 1543039966890823694
 
+WORLD_BIOME = "Mistlands"
 
 class ServerStatus(commands.Cog):
 
@@ -79,6 +80,11 @@ class ServerStatus(commands.Cog):
                 inline=True
             )
 
+            embed.add_field(
+                name="🗺️ Bioma atual",
+                value=f"**{WORLD_BIOME}**",
+                inline=True
+            )
 
         else:
 
