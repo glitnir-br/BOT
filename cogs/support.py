@@ -397,9 +397,84 @@ async def enviar_whitelist_base44(nickname: str, steamid: str) -> tuple:
         return False, str(e)
 
 
+async def obter_mensagem_boas_vindas(canal: discord.TextChannel):
+    """Busca a primeira mensagem do canal que tenha um embed (o embed de boas-vindas do ticket)."""
+    async for msg in canal.history(limit=5, oldest_first=True):
+        if msg.embeds:
+            return msg
+    return None
+
+
+class EditarNomeModal(ui.Modal, title="Editar Nome do Ticket"):
+    def __init__(self, mensagem: discord.Message, indice_campo: int, nome_campo: str, valor_atual: str):
+        super().__init__()
+        self.mensagem = mensagem
+        self.indice_campo = indice_campo
+        self.novo_valor = ui.TextInput(
+            label=nome_campo.lstrip("•").strip()[:45],
+            default=valor_atual if valor_atual != "—" else None,
+            placeholder="Digite o nome correto (sem espaços, números ou caracteres especiais)",
+            max_length=50,
+        )
+        self.add_item(self.novo_valor)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        embed = self.mensagem.embeds[0]
+        campo_antigo = embed.fields[self.indice_campo]
+        valor_antigo = campo_antigo.value
+        embed.set_field_at(
+            self.indice_campo, name=campo_antigo.name, value=self.novo_valor.value, inline=campo_antigo.inline
+        )
+        await self.mensagem.edit(embed=embed)
+        await interaction.response.send_message(
+            f"✅ Nome alterado de **{valor_antigo}** para **{self.novo_valor.value}**.", ephemeral=True
+        )
+        await send_log(
+            interaction.client, "Ticket: Nome Editado",
+            f"Alterou o nome deste ticket de `{valor_antigo}` para `{self.novo_valor.value}`",
+            user=interaction.user, cor=discord.Color.blurple()
+        )
+
+
 class TicketControlView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
+
+    @ui.button(label="Editar Nome", emoji="✏️", style=discord.ButtonStyle.secondary, custom_id="support:editar_nome")
+    async def editar_nome(self, interaction: discord.Interaction, button: ui.Button):
+        if not eh_staff(interaction.user):
+            await interaction.response.send_message(
+                "Só a equipe pode editar o nome deste ticket.", ephemeral=True
+            )
+            return
+
+        mensagem = await obter_mensagem_boas_vindas(interaction.channel)
+        if not mensagem or not mensagem.embeds:
+            await interaction.response.send_message("Não encontrei o formulário deste ticket.", ephemeral=True)
+            return
+
+        embed = mensagem.embeds[0]
+        indice_encontrado = None
+        for i, campo in enumerate(embed.fields):
+            if "nickname" in campo.name.lower():
+                indice_encontrado = i
+                break
+        if indice_encontrado is None:
+            for i, campo in enumerate(embed.fields):
+                if "nome" in campo.name.lower():
+                    indice_encontrado = i
+                    break
+
+        if indice_encontrado is None:
+            await interaction.response.send_message(
+                "Não encontrei um campo de Nickname/Nome neste ticket.", ephemeral=True
+            )
+            return
+
+        campo = embed.fields[indice_encontrado]
+        await interaction.response.send_modal(
+            EditarNomeModal(mensagem, indice_encontrado, campo.name, campo.value)
+        )
 
     @ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="support:close")
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
