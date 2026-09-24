@@ -1,9 +1,13 @@
 import asyncio
+import os
+
 import a2s
 import discord
+from dotenv import load_dotenv
 
 from discord.ext import commands, tasks
 
+load_dotenv()
 
 SERVER_IP = "177.54.147.114"
 QUERY_PORT = 24667
@@ -15,6 +19,7 @@ CHANNEL_ID = 1543025024645210303
 # Se deixar 0, o bot cria uma nova e mostra o ID no terminal
 MESSAGE_ID = 1543039966890823694
 
+WORLD_BIOME = os.getenv("WORLD_BIOME", "Mistlands")
 
 class ServerStatus(commands.Cog):
 
@@ -44,7 +49,6 @@ class ServerStatus(commands.Cog):
                 "nome": info.server_name,
                 "jogadores": info.player_count,
                 "max_jogadores": info.max_players,
-                "ping": round(info.ping * 1000)
             }
 
         except Exception as erro:
@@ -81,8 +85,8 @@ class ServerStatus(commands.Cog):
             )
 
             embed.add_field(
-                name="📡 Ping",
-                value=f'**{status["ping"]} ms**',
+                name="🗺️ Bioma atual",
+                value=f"**{WORLD_BIOME}**",
                 inline=True
             )
 
