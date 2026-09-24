@@ -1,6 +1,7 @@
 import asyncio
 import os
 
+import aiohttp
 import discord
 from discord import ui
 from discord.ext import commands
@@ -350,6 +351,52 @@ def eh_staff(member: discord.Member) -> bool:
     return False
 
 
+async def obter_respostas_ticket(canal: discord.TextChannel) -> dict:
+    """Busca o embed de boas-vindas do ticket (primeira mensagem do canal) e retorna
+    um dicionário {label sem o marcador "• ": valor}, pra facilitar buscar uma resposta pelo label exato."""
+    async for msg in canal.history(limit=5, oldest_first=True):
+        if msg.embeds:
+            return {campo.name.lstrip("•").strip(): campo.value for campo in msg.embeds[0].fields}
+    return {}
+
+
+async def enviar_whitelist_base44(nickname: str, steamid: str) -> tuple:
+    """Envia o Nickname e a SteamID aprovados pro Base44, pra cadastrar o player na tabela de players.
+    O Base44 responde com um JSON {"ok": bool, "error": str}, então além do status HTTP a gente
+    confere o campo "ok" — pode vir HTTP 200 com "ok": false se ele recusar por dentro.
+    Retorna (sucesso: bool, mensagem_de_erro: str — vazia se sucesso)."""
+    if not config.WHITELIST_TOKEN:
+        return False, "WHITELIST_TOKEN não configurado no .env"
+
+    payload = {"nick": nickname, "steamid": steamid}
+    headers = {
+        "Content-Type": "application/json",
+        "x-whitelist-token": config.WHITELIST_TOKEN,
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                config.BASE44_WHITELIST_URL,
+                json=payload,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resposta:
+                texto_bruto = await resposta.text()
+                try:
+                    dados = await resposta.json(content_type=None)
+                except Exception:
+                    dados = None
+
+                if resposta.status in (200, 201) and isinstance(dados, dict) and dados.get("ok"):
+                    return True, ""
+
+                erro = dados.get("error") if isinstance(dados, dict) else None
+                return False, str(erro) if erro else f"HTTP {resposta.status}: {texto_bruto[:200]}"
+    except Exception as e:
+        return False, str(e)
+
+
 class TicketControlView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -404,6 +451,29 @@ class WhitelistTicketView(TicketControlView):
             await interaction.channel.edit(topic=f"{topic}:aprovado")
         except Exception as e:
             print(f"Erro ao marcar ticket de whitelist como aprovado: {e}")
+
+        # --- Integração Base44: envia Nickname + SteamID pra tabela de players ---
+        respostas = await obter_respostas_ticket(interaction.channel)
+        nickname = (respostas.get("Nickname usado no jogo:") or "").strip()
+        steamid = (respostas.get("Sua SteamID:") or "").strip()
+
+        if nickname and steamid:
+            base44_ok, base44_erro = await enviar_whitelist_base44(nickname, steamid)
+        else:
+            base44_ok, base44_erro = False, "Não encontrei o Nickname/SteamID no formulário deste ticket"
+
+        if base44_ok:
+            await send_log(
+                interaction.client, "Whitelist: Base44",
+                f"Enviou {nickname} ({steamid}) pro Base44 (aprovado por {interaction.user.mention})",
+                user=membro, cor=discord.Color.green()
+            )
+        else:
+            await send_log(
+                interaction.client, "Whitelist: Base44 (falhou)",
+                f"Não conseguiu enviar {membro.mention} pro Base44 — {base44_erro}",
+                user=interaction.user, cor=discord.Color.red()
+            )
 
         embed_boas_vindas = discord.Embed(
             title="👋 Bem-vindo(a) ao Glitnir!",

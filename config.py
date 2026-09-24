@@ -44,6 +44,13 @@ CANAL_LOG_ID = _int_env("CANAL_LOG_ID")  # log geral (usado como fallback pros d
 LOG_ABERTOS_ID = _int_env("LOG_ABERTOS_ID") or CANAL_LOG_ID
 LOG_FECHADOS_ID = _int_env("LOG_FECHADOS_ID") or CANAL_LOG_ID
 
+# --- Integração Base44 (sincroniza a whitelist aprovada com a tabela de players) ---
+WHITELIST_TOKEN = os.getenv("WHITELIST_TOKEN", "")  # token secreto compartilhado com o Base44 (header x-whitelist-token)
+BASE44_WHITELIST_URL = os.getenv(
+    "BASE44_WHITELIST_URL",
+    "https://glitnir-nexus-core.base44.app/functions/aprovarWhitelist",
+)
+
 # Categoria do Discord onde cada tipo de ticket cria seu canal.
 # Se um tipo não tiver variável preenchida no .env, cai no SUPPORT_CATEGORY_ID acima.
 CATEGORIAS_POR_TIPO = {
