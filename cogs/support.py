@@ -572,6 +572,20 @@ class WhitelistTicketView(TicketControlView):
         nickname = (respostas.get("Nickname usado no jogo:") or "").strip()
         steamid = (respostas.get("Sua SteamID:") or "").strip()
 
+        # Garante que o apelido dele no Discord bate com o nome aprovado (regra do servidor).
+        if nickname and membro.display_name != nickname:
+            try:
+                await membro.edit(nick=nickname)
+            except discord.Forbidden:
+                await send_log(
+                    interaction.client, "Whitelist: Apelido (falhou)",
+                    f"Não consegui trocar o apelido de {membro.mention} pra `{nickname}` "
+                    "(permissão insuficiente — cargo dele pode estar igual ou acima do meu)",
+                    user=interaction.user, cor=discord.Color.orange()
+                )
+            except Exception as e:
+                print(f"Erro ao trocar apelido na aprovação da whitelist: {e}")
+
         if nickname and steamid:
             base44_ok, base44_erro = await enviar_whitelist_base44(nickname, steamid)
         else:
