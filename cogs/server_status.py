@@ -21,10 +21,21 @@ MESSAGE_ID = 1543039966890823694
 
 WORLD_BIOME = os.getenv("WORLD_BIOME", "Mistlands")
 
+# Intervalo normal entre consultas (segundos)
+INTERVALO_NORMAL = 60
+# Depois de várias falhas seguidas, passa a consultar bem mais devagar — evita
+# ficar abrindo conexão em cima de conexão à toa quando o servidor está fora
+# do ar por um tempo longo (isso já esgotou os arquivos abertos do sistema
+# e derrubou o bot uma vez).
+INTERVALO_COM_FALHA = 300
+FALHAS_PARA_BACKOFF = 5
+
+
 class ServerStatus(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.falhas_seguidas = 0
         self.status_loop.start()
 
     def cog_unload(self):
@@ -37,12 +48,18 @@ class ServerStatus(commands.Cog):
     async def consultar_servidor(self):
 
         try:
-
-            info = await asyncio.to_thread(
-                a2s.info,
-                (SERVER_IP, QUERY_PORT),
-                timeout=5
+            # Timeout duplo: o do a2s (5s) e um limite geral de 10s pra thread
+            # inteira, garantindo que a consulta nunca fique presa indefinidamente.
+            info = await asyncio.wait_for(
+                asyncio.to_thread(
+                    a2s.info,
+                    (SERVER_IP, QUERY_PORT),
+                    timeout=5,
+                ),
+                timeout=10,
             )
+
+            self.falhas_seguidas = 0
 
             return {
                 "online": True,
@@ -53,8 +70,11 @@ class ServerStatus(commands.Cog):
 
         except Exception as erro:
 
+            self.falhas_seguidas += 1
+
             print(
-                f"[Server Status] Erro ao consultar servidor: {erro}"
+                f"[Server Status] Erro ao consultar servidor: {erro} "
+                f"(falha nº {self.falhas_seguidas})"
             )
 
             return {
@@ -110,7 +130,7 @@ class ServerStatus(commands.Cog):
     # LOOP
     # =========================
 
-    @tasks.loop(seconds=60)
+    @tasks.loop(seconds=INTERVALO_NORMAL)
     async def status_loop(self):
 
         status = await self.consultar_servidor()
@@ -124,62 +144,69 @@ class ServerStatus(commands.Cog):
             print(
                 f"[Server Status] Canal {CHANNEL_ID} não encontrado."
             )
-            return
 
-        # Se já temos uma mensagem fixa
-        if MESSAGE_ID:
+        else:
 
-            try:
+            # Se já temos uma mensagem fixa
+            if MESSAGE_ID:
 
-                mensagem = await channel.fetch_message(
-                    MESSAGE_ID
-                )
+                try:
 
-                await mensagem.edit(
-                    embed=embed
-                )
+                    mensagem = await channel.fetch_message(
+                        MESSAGE_ID
+                    )
 
-                print(
-                    "[Server Status] Mensagem atualizada."
-                )
+                    await mensagem.edit(
+                        embed=embed
+                    )
 
-                return
+                    print(
+                        "[Server Status] Mensagem atualizada."
+                    )
 
-            except discord.NotFound:
+                except discord.NotFound:
 
-                print(
-                    "[Server Status] Mensagem não encontrada."
-                )
+                    print(
+                        "[Server Status] Mensagem não encontrada."
+                    )
 
-            except Exception as erro:
+                except Exception as erro:
 
-                print(
-                    f"[Server Status] Erro ao editar mensagem: {erro}"
-                )
+                    print(
+                        f"[Server Status] Erro ao editar mensagem: {erro}"
+                    )
 
-                return
+            else:
 
-        # Cria a mensagem caso ainda não exista
-        try:
+                # Cria a mensagem caso ainda não exista
+                try:
 
-            mensagem = await channel.send(
-                embed=embed
-            )
+                    mensagem = await channel.send(
+                        embed=embed
+                    )
 
-            print("")
-            print(
-                "[Server Status] NOVA MENSAGEM CRIADA"
-            )
-            print(
-                f"[Server Status] MESSAGE_ID = {mensagem.id}"
-            )
-            print("")
+                    print("")
+                    print(
+                        "[Server Status] NOVA MENSAGEM CRIADA"
+                    )
+                    print(
+                        f"[Server Status] MESSAGE_ID = {mensagem.id}"
+                    )
+                    print("")
 
-        except Exception as erro:
+                except Exception as erro:
 
-            print(
-                f"[Server Status] Erro ao criar mensagem: {erro}"
-            )
+                    print(
+                        f"[Server Status] Erro ao criar mensagem: {erro}"
+                    )
+
+        # Depois de muitas falhas seguidas, espaça bem mais as próximas
+        # tentativas, pra não sobrecarregar a rede/sistema enquanto o
+        # servidor Valheim estiver fora do ar por um tempo longo.
+        novo_intervalo = INTERVALO_COM_FALHA if self.falhas_seguidas >= FALHAS_PARA_BACKOFF else INTERVALO_NORMAL
+        if self.status_loop.seconds != novo_intervalo:
+            print(f"[Server Status] Ajustando intervalo de consulta pra {novo_intervalo}s.")
+            self.status_loop.change_interval(seconds=novo_intervalo)
 
     @status_loop.before_loop
     async def before_status_loop(self):
