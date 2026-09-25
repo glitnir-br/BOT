@@ -406,10 +406,20 @@ async def obter_mensagem_boas_vindas(canal: discord.TextChannel):
 
 
 class EditarNomeModal(ui.Modal, title="Editar Nome do Ticket"):
-    def __init__(self, mensagem: discord.Message, indice_campo: int, nome_campo: str, valor_atual: str):
+    def __init__(
+        self,
+        mensagem: discord.Message,
+        indice_campo: int,
+        nome_campo: str,
+        valor_atual: str,
+        eh_nickname: bool = False,
+        membro: discord.Member = None,
+    ):
         super().__init__()
         self.mensagem = mensagem
         self.indice_campo = indice_campo
+        self.eh_nickname = eh_nickname
+        self.membro = membro
         self.novo_valor = ui.TextInput(
             label=nome_campo.lstrip("•").strip()[:45],
             default=valor_atual if valor_atual != "—" else None,
@@ -426,8 +436,25 @@ class EditarNomeModal(ui.Modal, title="Editar Nome do Ticket"):
             self.indice_campo, name=campo_antigo.name, value=self.novo_valor.value, inline=campo_antigo.inline
         )
         await self.mensagem.edit(embed=embed)
+
+        # Se o campo editado é o Nickname (não "Nome da Guilda" ou similar), também troca
+        # o apelido do membro no servidor pra manter tudo igual.
+        aviso_apelido = ""
+        if self.eh_nickname and self.membro:
+            try:
+                await self.membro.edit(nick=self.novo_valor.value)
+                aviso_apelido = "\n✅ Apelido dele no servidor também foi atualizado."
+            except discord.Forbidden:
+                aviso_apelido = (
+                    "\n⚠️ Não consegui trocar o apelido dele no servidor (permissão insuficiente — "
+                    "o cargo dele pode estar igual ou acima do meu)."
+                )
+            except Exception as e:
+                aviso_apelido = f"\n⚠️ Não consegui trocar o apelido dele no servidor: {e}"
+
         await interaction.response.send_message(
-            f"✅ Nome alterado de **{valor_antigo}** para **{self.novo_valor.value}**.", ephemeral=True
+            f"✅ Nome alterado de **{valor_antigo}** para **{self.novo_valor.value}**.{aviso_apelido}",
+            ephemeral=True,
         )
         await send_log(
             interaction.client, "Ticket: Nome Editado",
@@ -455,9 +482,11 @@ class TicketControlView(ui.View):
 
         embed = mensagem.embeds[0]
         indice_encontrado = None
+        eh_nickname = False
         for i, campo in enumerate(embed.fields):
             if "nickname" in campo.name.lower():
                 indice_encontrado = i
+                eh_nickname = True
                 break
         if indice_encontrado is None:
             for i, campo in enumerate(embed.fields):
@@ -471,9 +500,20 @@ class TicketControlView(ui.View):
             )
             return
 
+        # Descobre o dono do ticket a partir do topic do canal, pra poder trocar o apelido
+        # dele no servidor também (só faz sentido quando o campo editado é o Nickname).
+        membro = None
+        if eh_nickname:
+            topic = interaction.channel.topic or ""
+            try:
+                user_id = int(topic.split(":")[1])
+                membro = interaction.guild.get_member(user_id)
+            except (IndexError, ValueError):
+                membro = None
+
         campo = embed.fields[indice_encontrado]
         await interaction.response.send_modal(
-            EditarNomeModal(mensagem, indice_encontrado, campo.name, campo.value)
+            EditarNomeModal(mensagem, indice_encontrado, campo.name, campo.value, eh_nickname, membro)
         )
 
     @ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="support:close")
