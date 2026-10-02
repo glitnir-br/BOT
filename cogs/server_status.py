@@ -19,7 +19,7 @@ CHANNEL_ID = 1543025024645210303
 # Se deixar 0, o bot cria uma nova e mostra o ID no terminal
 MESSAGE_ID = 1543039966890823694
 
-WORLD_BIOME = os.getenv("WORLD_BIOME", "Mistlands")
+WORLD_BIOME = os.getenv("WORLD_BIOME", "Prado")
 
 # Intervalo normal entre consultas (segundos)
 INTERVALO_NORMAL = 60
