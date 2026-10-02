@@ -9,8 +9,8 @@ from discord.ext import commands, tasks
 
 load_dotenv()
 
-SERVER_IP = "177.54.147.114"
-QUERY_PORT = 24667
+SERVER_IP = "162.43.190.115"
+QUERY_PORT = 2456
 
 # ID do canal onde ficará a mensagem de status
 CHANNEL_ID = 1543025024645210303
