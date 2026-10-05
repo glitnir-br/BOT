@@ -559,6 +559,13 @@ class WhitelistTicketView(TicketControlView):
             await interaction.response.send_message("Membro não encontrado no servidor (pode ter saído).", ephemeral=True)
             return
 
+        # Dá o "ok, recebi" pro Discord logo aqui — o que vem a seguir (chamada
+        # HTTP pro Base44, com até 10s de timeout, mais as trocas de cargo/apelido)
+        # passa fácil dos 3s que ele dá pra reconhecer a interação, causando o erro
+        # "O aplicativo não respondeu a tempo". Com o defer, a resposta final vira
+        # um followup, sem esse limite.
+        await interaction.response.defer()
+
         await membro.add_roles(role)
 
         # Marca esse canal como aprovado, pra aparecer certinho quando o ticket for arquivado depois
@@ -620,7 +627,7 @@ class WhitelistTicketView(TicketControlView):
             ),
             color=discord.Color.green(),
         )
-        await interaction.response.send_message(content=membro.mention, embed=embed_boas_vindas)
+        await interaction.followup.send(content=membro.mention, embed=embed_boas_vindas)
         await send_log(
             interaction.client, "Whitelist: Aprovado", f"Aprovou a whitelist de {membro.mention}",
             user=interaction.user, cor=discord.Color.green()

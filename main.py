@@ -23,7 +23,7 @@ EXTENSIONS = [
     "cogs.cargos",
     "cogs.anti_spam",
     "cogs.agendados",
-    "cogs.server_status",
+    # "cogs.server_status",  # desativado: IP/porta de query não confirmados (ver cogs/server_status.py)
 ]
 
 
