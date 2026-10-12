@@ -63,11 +63,10 @@ class ServerStatus(commands.Cog):
             title="STATUS DOS SERVIDORES",
             description=(
                 f"**{resumo}**\n"
-                "Atualiza\u00e7\u00e3o autom\u00e1tica a cada minuto."
+                "Atualiza\u00e7\u00e3o autom\u00e1tica a cada minuto.\n\u200b"
             ),
             color=cor,
         )
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
 
         for indice, (config, status) in enumerate(zip(SERVIDORES, statuses)):
             if status["online"]:
@@ -84,13 +83,9 @@ class ServerStatus(commands.Cog):
                     "O servidor n\u00e3o respondeu \u00e0 consulta."
                 )
 
-            embed.add_field(name=config["nome"], value=detalhes, inline=False)
             if indice < len(SERVIDORES) - 1:
-                embed.add_field(
-                    name="\u200b",
-                    value="\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
-                    inline=False,
-                )
+                detalhes += "\n\u200b"
+            embed.add_field(name=config["nome"], value=detalhes, inline=False)
 
         embed.set_footer(text="Glitnir | Status autom\u00e1tico")
         embed.timestamp = discord.utils.utcnow()
