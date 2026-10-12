@@ -67,8 +67,9 @@ class ServerStatus(commands.Cog):
             ),
             color=cor,
         )
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
 
-        for config, status in zip(SERVIDORES, statuses):
+        for indice, (config, status) in enumerate(zip(SERVIDORES, statuses)):
             if status["online"]:
                 indicador = "\N{LARGE GREEN CIRCLE} ONLINE"
                 detalhes = (
@@ -84,6 +85,12 @@ class ServerStatus(commands.Cog):
                 )
 
             embed.add_field(name=config["nome"], value=detalhes, inline=False)
+            if indice < len(SERVIDORES) - 1:
+                embed.add_field(
+                    name="\u200b",
+                    value="\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500",
+                    inline=False,
+                )
 
         embed.set_footer(text="Glitnir | Status autom\u00e1tico")
         embed.timestamp = discord.utils.utcnow()
