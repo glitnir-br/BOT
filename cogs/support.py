@@ -408,60 +408,49 @@ async def obter_mensagem_boas_vindas(canal: discord.TextChannel):
     return None
 
 
-class EditarNomeModal(ui.Modal, title="Editar Nome do Ticket"):
+class EditarSteamIdModal(ui.Modal, title="Editar SteamID"):
     def __init__(
         self,
         mensagem: discord.Message,
         indice_campo: int,
-        nome_campo: str,
         valor_atual: str,
-        eh_nickname: bool = False,
-        membro: discord.Member = None,
     ):
         super().__init__()
         self.mensagem = mensagem
         self.indice_campo = indice_campo
-        self.eh_nickname = eh_nickname
-        self.membro = membro
         self.novo_valor = ui.TextInput(
-            label=nome_campo.lstrip("•").strip()[:45],
+            label="SteamID64",
             default=valor_atual if valor_atual != "—" else None,
-            placeholder="Digite o nome correto (sem espaços, números ou caracteres especiais)",
-            max_length=50,
+            placeholder="Digite os 17 números da SteamID",
+            min_length=17,
+            max_length=17,
         )
         self.add_item(self.novo_valor)
 
     async def on_submit(self, interaction: discord.Interaction):
+        steamid = self.novo_valor.value.strip()
+        if not STEAM_ID64.fullmatch(steamid):
+            await interaction.response.send_message(
+                "❌ **SteamID inválida.** Informe somente os 17 números da sua SteamID64.",
+                ephemeral=True,
+            )
+            return
+
         embed = self.mensagem.embeds[0]
         campo_antigo = embed.fields[self.indice_campo]
         valor_antigo = campo_antigo.value
         embed.set_field_at(
-            self.indice_campo, name=campo_antigo.name, value=self.novo_valor.value, inline=campo_antigo.inline
+            self.indice_campo, name=campo_antigo.name, value=steamid, inline=campo_antigo.inline
         )
         await self.mensagem.edit(embed=embed)
 
-        # Se o campo editado é o Nickname (não "Nome da Guilda" ou similar), também troca
-        # o apelido do membro no servidor pra manter tudo igual.
-        aviso_apelido = ""
-        if self.eh_nickname and self.membro:
-            try:
-                await self.membro.edit(nick=self.novo_valor.value)
-                aviso_apelido = "\n✅ Apelido dele no servidor também foi atualizado."
-            except discord.Forbidden:
-                aviso_apelido = (
-                    "\n⚠️ Não consegui trocar o apelido dele no servidor (permissão insuficiente — "
-                    "o cargo dele pode estar igual ou acima do meu)."
-                )
-            except Exception as e:
-                aviso_apelido = f"\n⚠️ Não consegui trocar o apelido dele no servidor: {e}"
-
         await interaction.response.send_message(
-            f"✅ Nome alterado de **{valor_antigo}** para **{self.novo_valor.value}**.{aviso_apelido}",
+            f"✅ SteamID alterada de `{valor_antigo}` para `{steamid}`.",
             ephemeral=True,
         )
         await send_log(
-            interaction.client, "Ticket: Nome Editado",
-            f"Alterou o nome deste ticket de `{valor_antigo}` para `{self.novo_valor.value}`",
+            interaction.client, "Whitelist: SteamID Editada",
+            f"Alterou a SteamID deste ticket de `{valor_antigo}` para `{steamid}`",
             user=interaction.user, cor=discord.Color.blurple()
         )
 
@@ -470,11 +459,11 @@ class TicketControlView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Editar Nome", emoji="✏️", style=discord.ButtonStyle.secondary, custom_id="support:editar_nome")
-    async def editar_nome(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(label="Editar SteamID", emoji="✏️", style=discord.ButtonStyle.secondary, custom_id="support:editar_steamid")
+    async def editar_steamid(self, interaction: discord.Interaction, button: ui.Button):
         if not eh_staff(interaction.user):
             await interaction.response.send_message(
-                "Só a equipe pode editar o nome deste ticket.", ephemeral=True
+                "Só a equipe pode editar a SteamID deste ticket.", ephemeral=True
             )
             return
 
@@ -485,38 +474,19 @@ class TicketControlView(ui.View):
 
         embed = mensagem.embeds[0]
         indice_encontrado = None
-        eh_nickname = False
         for i, campo in enumerate(embed.fields):
-            if "nickname" in campo.name.lower():
+            if "steamid" in campo.name.lower().replace(" ", ""):
                 indice_encontrado = i
-                eh_nickname = True
-                break
-        if indice_encontrado is None:
-            for i, campo in enumerate(embed.fields):
-                if "nome" in campo.name.lower():
-                    indice_encontrado = i
-                    break
 
         if indice_encontrado is None:
             await interaction.response.send_message(
-                "Não encontrei um campo de Nickname/Nome neste ticket.", ephemeral=True
+                "Não encontrei um campo de SteamID neste ticket.", ephemeral=True
             )
             return
 
-        # Descobre o dono do ticket a partir do topic do canal, pra poder trocar o apelido
-        # dele no servidor também (só faz sentido quando o campo editado é o Nickname).
-        membro = None
-        if eh_nickname:
-            topic = interaction.channel.topic or ""
-            try:
-                user_id = int(topic.split(":")[1])
-                membro = interaction.guild.get_member(user_id)
-            except (IndexError, ValueError):
-                membro = None
-
         campo = embed.fields[indice_encontrado]
         await interaction.response.send_modal(
-            EditarNomeModal(mensagem, indice_encontrado, campo.name, campo.value, eh_nickname, membro)
+            EditarSteamIdModal(mensagem, indice_encontrado, campo.value)
         )
 
     @ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="support:close")
@@ -687,7 +657,10 @@ class WhitelistTicketView(TicketControlView):
         )
 
         for child in self.children:
-            if child.custom_id and child.custom_id.startswith("support:aprovar_whitelist:"):
+            if child.custom_id and (
+                child.custom_id.startswith("support:aprovar_whitelist:")
+                or child.custom_id == "support:editar_steamid"
+            ):
                 child.disabled = True
         try:
             await interaction.message.edit(view=self)
