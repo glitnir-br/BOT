@@ -24,6 +24,7 @@ EXTENSIONS = [
     "cogs.anti_spam",
     "cogs.agendados",
     "cogs.server_status",
+    "cogs.whitelist",
 ]
 
 

@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 import aiohttp
 import discord
@@ -20,6 +21,7 @@ IMAGEM_PIX = os.path.join(ASSETS_DIR, "doacao_pix.png")
 
 # Imagem de instruções pra deixar o perfil Steam público (Whitelist)
 IMAGEM_STEAM_PUBLICO = os.path.join(ASSETS_DIR, "whitelist_steam.png")
+STEAM_ID64 = re.compile(r"^\d{17}$")
 
 
 async def montar_embeds_extra_doacao(bot):
@@ -266,7 +268,7 @@ async def process_ticket_closure(bot, canal: discord.TextChannel, user_who_close
         embed.add_field(name="Encerrado por", value=user_who_closed.mention, inline=True)
 
         if categoria_ticket == "Whitelist":
-            aprovado = bool(canal.topic and canal.topic.endswith(":aprovado"))
+            aprovado = bool(canal.topic and ":aprovado" in canal.topic)
             embed.add_field(
                 name="Whitelist",
                 value="✅ Aprovada" if aprovado else "❌ Não aprovada",
@@ -528,11 +530,32 @@ class TicketControlView(ui.View):
 
 
 class WhitelistTicketView(TicketControlView):
-    @ui.button(label="Aprovar Whitelist", emoji="✅", style=discord.ButtonStyle.success, custom_id="support:aprovar_whitelist")
-    async def aprovar(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(label="Server 1", emoji="✅", style=discord.ButtonStyle.success, custom_id="support:aprovar_whitelist:server_1")
+    async def aprovar_server_1(self, interaction: discord.Interaction, button: ui.Button):
+        await self._aprovar(interaction, "server_1")
+
+    @ui.button(label="Server 2", emoji="✅", style=discord.ButtonStyle.success, custom_id="support:aprovar_whitelist:server_2")
+    async def aprovar_server_2(self, interaction: discord.Interaction, button: ui.Button):
+        await self._aprovar(interaction, "server_2")
+
+    async def _aprovar(self, interaction: discord.Interaction, servidor_chave: str):
         if not eh_staff(interaction.user):
             await interaction.response.send_message(
                 "Só a equipe pode aprovar uma whitelist.", ephemeral=True
+            )
+            return
+
+        whitelist_cog = interaction.client.get_cog("Whitelist")
+        if not whitelist_cog:
+            await interaction.response.send_message("Integração de whitelist não está disponível no momento.", ephemeral=True)
+            return
+
+        nome_servidor, configuracao_servidor = whitelist_cog.configuracoes_servidores().get(
+            servidor_chave, (None, None)
+        )
+        if not nome_servidor or not whitelist_cog.configuracao_valida(configuracao_servidor):
+            await interaction.response.send_message(
+                f"{nome_servidor or 'Este servidor'} não está configurado no Pterodactyl.", ephemeral=True
             )
             return
 
@@ -548,6 +571,9 @@ class WhitelistTicketView(TicketControlView):
             return
 
         topic = interaction.channel.topic or ""
+        if ":aprovado" in topic:
+            await interaction.response.send_message("Esta whitelist já foi aprovada neste ticket.", ephemeral=True)
+            return
         try:
             user_id = int(topic.split(":")[1])
         except (IndexError, ValueError):
@@ -566,18 +592,42 @@ class WhitelistTicketView(TicketControlView):
         # um followup, sem esse limite.
         await interaction.response.defer()
 
-        await membro.add_roles(role)
-
-        # Marca esse canal como aprovado, pra aparecer certinho quando o ticket for arquivado depois
-        try:
-            await interaction.channel.edit(topic=f"{topic}:aprovado")
-        except Exception as e:
-            print(f"Erro ao marcar ticket de whitelist como aprovado: {e}")
-
-        # --- Integração Base44: envia Nickname + SteamID pra tabela de players ---
+        # A SteamID é gravada no Pterodactyl antes de qualquer efeito no Discord.
+        # Assim, uma falha na API não dá cargo nem marca o ticket como aprovado.
         respostas = await obter_respostas_ticket(interaction.channel)
         nickname = (respostas.get("Nickname usado no jogo:") or "").strip()
         steamid = (respostas.get("Sua SteamID:") or "").strip()
+        if not STEAM_ID64.fullmatch(steamid):
+            await interaction.followup.send(
+                "Não encontrei uma SteamID64 válida no formulário deste ticket. A aprovação não foi concluída.",
+                ephemeral=True,
+            )
+            return
+
+        try:
+            resultado_whitelist = await whitelist_cog.adicionar_whitelist(steamid, configuracao_servidor)
+        except aiohttp.ClientResponseError as erro:
+            print(f"[Whitelist] Pterodactyl retornou HTTP {erro.status} ao aprovar no {nome_servidor}.")
+            await interaction.followup.send(
+                f"Não foi possível atualizar a whitelist do **{nome_servidor}**. A aprovação não foi concluída.",
+                ephemeral=True,
+            )
+            return
+        except (aiohttp.ClientError, asyncio.TimeoutError) as erro:
+            print(f"[Whitelist] Erro de conexão ao aprovar no {nome_servidor}: {erro}")
+            await interaction.followup.send(
+                f"Não foi possível conectar ao **{nome_servidor}**. A aprovação não foi concluída.",
+                ephemeral=True,
+            )
+            return
+
+        await membro.add_roles(role)
+
+        # Marca o ticket depois de a SteamID estar confirmada na whitelist escolhida.
+        try:
+            await interaction.channel.edit(topic=f"{topic}:aprovado:{servidor_chave}")
+        except Exception as e:
+            print(f"Erro ao marcar ticket de whitelist como aprovado: {e}")
 
         # Garante que o apelido dele no Discord bate com o nome aprovado (regra do servidor).
         if nickname and membro.display_name != nickname:
@@ -629,9 +679,17 @@ class WhitelistTicketView(TicketControlView):
         )
         await interaction.followup.send(content=membro.mention, embed=embed_boas_vindas)
         await send_log(
-            interaction.client, "Whitelist: Aprovado", f"Aprovou a whitelist de {membro.mention}",
+            interaction.client, "Whitelist: Aprovado",
+            f"Aprovou a whitelist de {membro.mention} no {nome_servidor} ({resultado_whitelist})",
             user=interaction.user, cor=discord.Color.green()
         )
+
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.message.edit(view=self)
+        except discord.HTTPException as e:
+            print(f"Erro ao desativar botões de whitelist: {e}")
 
 
 def obter_categoria_discord(guild: discord.Guild, categoria: str):
@@ -748,6 +806,63 @@ class CategoriaModal(ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         respostas = [(self.perguntas[i]["label"], self.campos[i].value) for i in range(len(self.campos))]
         await interaction.response.defer(ephemeral=True)
+
+        if self.categoria == "Whitelist":
+            steamid = next((valor.strip() for label, valor in respostas if label == "Sua SteamID:"), "")
+            if not STEAM_ID64.fullmatch(steamid):
+                await interaction.followup.send(
+                    "❌ **SteamID inválida.** Informe somente os 17 números da sua SteamID64.\n\n"
+                    "**Como encontrar sua SteamID:**\n"
+                    "1. Abra a Steam.\n"
+                    "2. Clique no seu nome de usuário, no canto superior direito.\n"
+                    "3. Selecione **Detalhes da conta**.\n"
+                    "4. Abaixo do seu nome aparecerá **ID Steam: ...**.\n"
+                    "5. Copie apenas os números mostrados depois de **ID Steam**.\n\n"
+                    "Não envie nome de usuário, link do perfil, espaços ou símbolos.",
+                    ephemeral=True,
+                )
+                return
+
+            whitelist_cog = interaction.client.get_cog("Whitelist")
+            if not whitelist_cog:
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Tente novamente em alguns minutos.",
+                    ephemeral=True,
+                )
+                return
+
+            try:
+                servidores_encontrados = await whitelist_cog.verificar_servidores(steamid)
+            except RuntimeError as erro:
+                print(f"[Whitelist] Configuração inválida: {erro}")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Avise a equipe e tente novamente mais tarde.",
+                    ephemeral=True,
+                )
+                return
+            except aiohttp.ClientResponseError as erro:
+                print(f"[Whitelist] Pterodactyl retornou HTTP {erro.status} ao consultar formulário.")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Tente novamente em alguns minutos.",
+                    ephemeral=True,
+                )
+                return
+            except (aiohttp.ClientError, asyncio.TimeoutError) as erro:
+                print(f"[Whitelist] Erro de conexão ao consultar formulário: {erro}")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Tente novamente em alguns minutos.",
+                    ephemeral=True,
+                )
+                return
+
+            if servidores_encontrados:
+                lista_servidores = " e ".join(servidores_encontrados)
+                await interaction.followup.send(
+                    f"✅ Sua SteamID já está liberada no **{lista_servidores}**. "
+                    "Por isso, não foi aberto um ticket de whitelist.",
+                    ephemeral=True,
+                )
+                return
 
         if self.mensagem_para_apagar:
             try:
