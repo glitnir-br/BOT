@@ -687,7 +687,8 @@ class WhitelistTicketView(TicketControlView):
         )
 
         for child in self.children:
-            child.disabled = True
+            if child.custom_id and child.custom_id.startswith("support:aprovar_whitelist:"):
+                child.disabled = True
         try:
             await interaction.message.edit(view=self)
         except discord.HTTPException as e:
