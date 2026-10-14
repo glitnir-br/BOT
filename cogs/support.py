@@ -455,39 +455,127 @@ class EditarSteamIdModal(ui.Modal, title="Editar SteamID"):
         )
 
 
+class EditarNomeModal(ui.Modal, title="Editar Nome"):
+    def __init__(self, mensagem: discord.Message, indice_campo: int, valor_atual: str, membro: discord.Member = None):
+        super().__init__()
+        self.mensagem = mensagem
+        self.indice_campo = indice_campo
+        self.membro = membro
+        self.novo_valor = ui.TextInput(
+            label="Nickname do personagem",
+            default=valor_atual if valor_atual != "—" else None,
+            placeholder="Use somente letras sem acentuação",
+            max_length=20,
+        )
+        self.add_item(self.novo_valor)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        nickname = self.novo_valor.value.strip()
+        if not NICKNAME_VALIDO.fullmatch(nickname):
+            await interaction.response.send_message(
+                "❌ **Nickname inválido.** Use somente letras sem acentuação, sem espaços, números ou símbolos.",
+                ephemeral=True,
+            )
+            return
+
+        embed = self.mensagem.embeds[0]
+        campo_antigo = embed.fields[self.indice_campo]
+        valor_antigo = campo_antigo.value
+        embed.set_field_at(
+            self.indice_campo, name=campo_antigo.name, value=nickname, inline=campo_antigo.inline
+        )
+        await self.mensagem.edit(embed=embed)
+
+        aviso_apelido = ""
+        if self.membro:
+            try:
+                await self.membro.edit(nick=nickname)
+                aviso_apelido = " O apelido no Discord também foi atualizado."
+            except discord.Forbidden:
+                aviso_apelido = " Não consegui atualizar o apelido no Discord por falta de permissão."
+            except Exception as erro:
+                print(f"Erro ao trocar apelido ao editar nickname: {erro}")
+                aviso_apelido = " Não consegui atualizar o apelido no Discord."
+
+        await interaction.response.send_message(
+            f"✅ Nome alterado de `{valor_antigo}` para `{nickname}`.{aviso_apelido}", ephemeral=True
+        )
+        await send_log(
+            interaction.client, "Whitelist: Nome Editado",
+            f"Alterou o nome deste ticket de `{valor_antigo}` para `{nickname}`",
+            user=interaction.user, cor=discord.Color.blurple()
+        )
+
+
+async def abrir_modal_edicao(interaction: discord.Interaction, campo_escolhido: str):
+    """Abre o modal do campo escolhido no embed inicial do ticket."""
+    mensagem = await obter_mensagem_boas_vindas(interaction.channel)
+    if not mensagem or not mensagem.embeds:
+        await interaction.response.send_message("Não encontrei o formulário deste ticket.", ephemeral=True)
+        return
+
+    embed = mensagem.embeds[0]
+    termo = "nickname" if campo_escolhido == "nome" else "steamid"
+    indice_encontrado = next(
+        (i for i, campo in enumerate(embed.fields) if termo in campo.name.lower().replace(" ", "")),
+        None,
+    )
+    if indice_encontrado is None:
+        await interaction.response.send_message(
+            f"Não encontrei o campo de {'Nickname' if campo_escolhido == 'nome' else 'SteamID'} neste ticket.",
+            ephemeral=True,
+        )
+        return
+
+    campo = embed.fields[indice_encontrado]
+    if campo_escolhido == "steamid":
+        await interaction.response.send_modal(EditarSteamIdModal(mensagem, indice_encontrado, campo.value))
+        return
+
+    membro = None
+    topic = interaction.channel.topic or ""
+    try:
+        user_id = int(topic.split(":")[1])
+        membro = interaction.guild.get_member(user_id)
+    except (IndexError, ValueError):
+        pass
+    await interaction.response.send_modal(EditarNomeModal(mensagem, indice_encontrado, campo.value, membro))
+
+
+class EditarCampoSelect(ui.Select):
+    def __init__(self):
+        super().__init__(
+            placeholder="Escolha o que deseja editar",
+            min_values=1,
+            max_values=1,
+            options=[
+                discord.SelectOption(label="Editar nome", value="nome", emoji="✏️"),
+                discord.SelectOption(label="Editar SteamID", value="steamid", emoji="🔢"),
+            ],
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        await abrir_modal_edicao(interaction, self.values[0])
+
+
+class EditarCampoView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=120)
+        self.add_item(EditarCampoSelect())
+
+
 class TicketControlView(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Editar SteamID", emoji="✏️", style=discord.ButtonStyle.secondary, custom_id="support:editar_steamid")
-    async def editar_steamid(self, interaction: discord.Interaction, button: ui.Button):
+    @ui.button(label="Editar", emoji="✏️", style=discord.ButtonStyle.secondary, custom_id="support:editar")
+    async def editar(self, interaction: discord.Interaction, button: ui.Button):
         if not eh_staff(interaction.user):
             await interaction.response.send_message(
-                "Só a equipe pode editar a SteamID deste ticket.", ephemeral=True
+                "Só a equipe pode editar os dados deste ticket.", ephemeral=True
             )
             return
-
-        mensagem = await obter_mensagem_boas_vindas(interaction.channel)
-        if not mensagem or not mensagem.embeds:
-            await interaction.response.send_message("Não encontrei o formulário deste ticket.", ephemeral=True)
-            return
-
-        embed = mensagem.embeds[0]
-        indice_encontrado = None
-        for i, campo in enumerate(embed.fields):
-            if "steamid" in campo.name.lower().replace(" ", ""):
-                indice_encontrado = i
-
-        if indice_encontrado is None:
-            await interaction.response.send_message(
-                "Não encontrei um campo de SteamID neste ticket.", ephemeral=True
-            )
-            return
-
-        campo = embed.fields[indice_encontrado]
-        await interaction.response.send_modal(
-            EditarSteamIdModal(mensagem, indice_encontrado, campo.value)
-        )
+        await interaction.response.send_message("Escolha o dado que deseja editar:", view=EditarCampoView(), ephemeral=True)
 
     @ui.button(label="Fechar Ticket", style=discord.ButtonStyle.danger, custom_id="support:close")
     async def close_ticket(self, interaction: discord.Interaction, button: ui.Button):
@@ -659,7 +747,7 @@ class WhitelistTicketView(TicketControlView):
         for child in self.children:
             if child.custom_id and (
                 child.custom_id.startswith("support:aprovar_whitelist:")
-                or child.custom_id == "support:editar_steamid"
+                or child.custom_id == "support:editar"
             ):
                 child.disabled = True
         try:
