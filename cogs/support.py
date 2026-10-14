@@ -22,6 +22,7 @@ IMAGEM_PIX = os.path.join(ASSETS_DIR, "doacao_pix.png")
 # Imagem de instruções pra deixar o perfil Steam público (Whitelist)
 IMAGEM_STEAM_PUBLICO = os.path.join(ASSETS_DIR, "whitelist_steam.png")
 STEAM_ID64 = re.compile(r"^\d{17}$")
+NICKNAME_VALIDO = re.compile(r"^[A-Za-z]+$")
 
 
 async def montar_embeds_extra_doacao(bot):
@@ -662,9 +663,10 @@ class WhitelistTicketView(TicketControlView):
             )
 
         embed_boas_vindas = discord.Embed(
-            title="👋 Bem-vindo(a) ao Glitnir!",
+            title=f"✅ Whitelist aprovada — {nome_servidor}",
             description=(
-                "Seja muito bem-vindo(a)! Antes de entrar no servidor, siga estes passos:\n\n"
+                f"Parabéns! Sua whitelist foi aprovada para o **{nome_servidor}**.\n\n"
+                "👋 Seja muito bem-vindo(a) ao Glitnir! Antes de entrar no servidor, siga estes passos:\n\n"
                 "📜 **Leia as Regras:**\n"
                 "https://discord.com/channels/848339987174785054/1389580571214348328\n\n"
                 "🛠️ **Veja o Guia de Instalação:**\n"
@@ -808,7 +810,17 @@ class CategoriaModal(ui.Modal):
         await interaction.response.defer(ephemeral=True)
 
         if self.categoria == "Whitelist":
+            nickname = next((valor.strip() for label, valor in respostas if label == "Nickname usado no jogo:"), "")
             steamid = next((valor.strip() for label, valor in respostas if label == "Sua SteamID:"), "")
+            if not NICKNAME_VALIDO.fullmatch(nickname):
+                await interaction.followup.send(
+                    "❌ **Nickname inválido.** Use apenas letras sem acentuação no nome do personagem.\n\n"
+                    "Não são permitidos espaços, números, acentos ou caracteres especiais.\n"
+                    "Exemplos válidos: `Thor`, `Freya`, `Alvaro`.",
+                    ephemeral=True,
+                )
+                return
+
             if not STEAM_ID64.fullmatch(steamid):
                 await interaction.followup.send(
                     "❌ **SteamID inválida.** Informe somente os 17 números da sua SteamID64.\n\n"
