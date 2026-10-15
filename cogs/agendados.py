@@ -101,28 +101,25 @@ class EditarAgendamentoModal(ui.Modal, title="Editar agendamento"):
         super().__init__()
         self.cog, self.item_id = cog, item["id"]
         momento = datetime.fromisoformat(item["data_hora"])
-        self.data = ui.TextInput(label="Data", default=momento.strftime("%d/%m/%Y"), max_length=10)
         self.hora = ui.TextInput(label="Hora", default=momento.strftime("%H:%M"), max_length=5)
-        self.repeticao = ui.TextInput(label="Repetição", default=item.get("repeticao") or "nenhuma", required=False, max_length=10)
         self.texto = ui.TextInput(label="Mensagem", default=item["texto"], style=discord.TextStyle.paragraph, max_length=4000)
-        for campo in (self.data, self.hora, self.repeticao, self.texto): self.add_item(campo)
+        for campo in (self.hora, self.texto): self.add_item(campo)
 
     async def on_submit(self, interaction):
+        item = self.cog.buscar_item(self.item_id)
+        if not item:
+            await interaction.response.send_message("Este agendamento não existe mais.", ephemeral=True); return
         try:
-            momento = datetime.strptime(f"{self.data.value.strip()} {self.hora.value.strip()}", "%d/%m/%Y %H:%M").replace(tzinfo=config.TZ_BRASILIA)
+            hora = datetime.strptime(self.hora.value.strip(), "%H:%M").time()
+            momento = datetime.fromisoformat(item["data_hora"]).replace(hour=hora.hour, minute=hora.minute)
         except ValueError:
-            await interaction.response.send_message("Data ou hora inválida. Use `DD/MM/AAAA` e `HH:MM`.", ephemeral=True); return
-        repeticao_texto = self.repeticao.value.strip().lower()
-        repeticao = None if repeticao_texto in ("", "nenhuma", "nao", "não") else PALAVRAS_REPETICAO.get(repeticao_texto)
+            await interaction.response.send_message("Hora inválida. Use `HH:MM`.", ephemeral=True); return
         if momento <= datetime.now(config.TZ_BRASILIA):
             await interaction.response.send_message("Escolha uma data e hora futuras.", ephemeral=True); return
-        if repeticao_texto and repeticao is None:
-            await interaction.response.send_message("Repetição inválida. Use `nenhuma`, `diario` ou `semanal`.", ephemeral=True); return
-        item = self.cog.buscar_item(self.item_id)
         texto = self.texto.value.strip()
         if not item or not texto:
             await interaction.response.send_message("O agendamento não existe mais ou a mensagem está vazia.", ephemeral=True); return
-        item.update(data_hora=momento.isoformat(), repeticao=repeticao, texto=texto)
+        item.update(data_hora=momento.isoformat(), texto=texto)
         self.cog._salvar(); await self.cog.atualizar_card(item)
         await interaction.response.send_message("✅ Agendamento atualizado.", ephemeral=True)
 
