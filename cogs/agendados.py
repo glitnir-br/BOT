@@ -111,7 +111,13 @@ class EditarAgendamentoModal(ui.Modal, title="Editar agendamento"):
         momento = datetime.fromisoformat(item["data_hora"])
         self.hora = ui.TextInput(label="Hora", default=momento.strftime("%H:%M"), max_length=5)
         self.texto = ui.TextInput(label="Mensagem", default=item["texto"], style=discord.TextStyle.paragraph, max_length=4000)
+        self.imagem = ui.FileUpload(required=False, max_values=1)
         for campo in (self.hora, self.texto): self.add_item(campo)
+        self.add_item(ui.Label(
+            text="Substituir imagem (opcional)",
+            description="Envie uma nova imagem ou deixe vazio para manter a atual.",
+            component=self.imagem,
+        ))
 
     async def on_submit(self, interaction):
         item = self.cog.buscar_item(self.item_id)
@@ -127,6 +133,11 @@ class EditarAgendamentoModal(ui.Modal, title="Editar agendamento"):
         texto = self.texto.value.strip()
         if not item or not texto:
             await interaction.response.send_message("O agendamento não existe mais ou a mensagem está vazia.", ephemeral=True); return
+        imagem_anexo = self.imagem.values[0] if self.imagem.values else None
+        if imagem_anexo and (not imagem_anexo.content_type or not imagem_anexo.content_type.startswith("image/")):
+            await interaction.response.send_message("O arquivo enviado precisa ser uma imagem.", ephemeral=True); return
+        if imagem_anexo:
+            await self.cog.substituir_imagem(item, imagem_anexo)
         item.update(data_hora=momento.isoformat(), texto=texto)
         self.cog._salvar(); await self.cog.atualizar_card(item)
         await interaction.response.send_message("✅ Agendamento atualizado.", ephemeral=True)
@@ -189,6 +200,16 @@ class Agendados(commands.Cog):
     def cog_unload(self): self.verificar_agendados.cancel()
     def _salvar(self): storage.save_json(DATA_FILE, {"itens": self.itens, "proximo_id": self.proximo_id})
     def buscar_item(self, item_id): return next((x for x in self.itens if x["id"] == item_id), None)
+
+    async def substituir_imagem(self, item, anexo):
+        extensao = os.path.splitext(anexo.filename)[1] or ".png"
+        novo_caminho = os.path.join(PASTA_IMAGENS, f"{item['id']}{extensao}")
+        caminho_antigo = item.get("imagem")
+        await anexo.save(novo_caminho)
+        if caminho_antigo and caminho_antigo != novo_caminho and os.path.exists(caminho_antigo):
+            try: os.remove(caminho_antigo)
+            except Exception as erro: print(f"Erro ao remover imagem antiga do agendamento {item['id']}: {erro}")
+        item["imagem"] = novo_caminho
 
     async def criar_agendamento(self, canal_id, momento, texto, repeticao, criado_por, imagem=None, criado_por_nome=None, imagem_anexo=None):
         item_id = self.proximo_id; self.proximo_id += 1
