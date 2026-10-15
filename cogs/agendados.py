@@ -16,30 +16,25 @@ NOMES_REPETICAO = {"diario": "todo dia", "semanal": "toda semana"}
 
 
 class NovoAgendamentoModal(ui.Modal, title="Novo agendamento"):
-    def __init__(self, cog, canal_id):
+    def __init__(self, cog, canal_id, repeticao):
         super().__init__()
-        self.cog, self.canal_id = cog, canal_id
+        self.cog, self.canal_id, self.repeticao_escolhida = cog, canal_id, repeticao
         self.data = ui.TextInput(label="Data", placeholder="DD/MM/AAAA", max_length=10)
         self.hora = ui.TextInput(label="Hora", placeholder="HH:MM", max_length=5)
-        self.repeticao = ui.TextInput(label="Frequência", placeholder="nenhuma, diario ou semanal", default="nenhuma", max_length=10)
         self.texto = ui.TextInput(label="Mensagem", style=discord.TextStyle.paragraph, max_length=4000)
-        for campo in (self.data, self.hora, self.repeticao, self.texto): self.add_item(campo)
+        for campo in (self.data, self.hora, self.texto): self.add_item(campo)
 
     async def on_submit(self, interaction):
         try:
             momento = datetime.strptime(f"{self.data.value.strip()} {self.hora.value.strip()}", "%d/%m/%Y %H:%M").replace(tzinfo=config.TZ_BRASILIA)
         except ValueError:
             await interaction.response.send_message("Data ou hora inválida. Use `DD/MM/AAAA` e `HH:MM`.", ephemeral=True); return
-        frequencia = self.repeticao.value.strip().lower()
-        repeticao = None if frequencia in ("", "nenhuma", "nao", "não") else PALAVRAS_REPETICAO.get(frequencia)
         if momento <= datetime.now(config.TZ_BRASILIA):
             await interaction.response.send_message("Escolha uma data e hora futuras.", ephemeral=True); return
-        if frequencia and repeticao is None:
-            await interaction.response.send_message("Frequência inválida. Use `nenhuma`, `diario` ou `semanal`.", ephemeral=True); return
         texto = self.texto.value.strip()
         if not texto:
             await interaction.response.send_message("A mensagem não pode ficar vazia.", ephemeral=True); return
-        item = await self.cog.criar_agendamento(self.canal_id, momento, texto, repeticao, interaction.user.id)
+        item = await self.cog.criar_agendamento(self.canal_id, momento, texto, self.repeticao_escolhida, interaction.user.id)
         await interaction.response.send_message(f"✅ Agendamento **ID {item['id']}** criado e enviado ao canal de avisos.", ephemeral=True)
 
 
@@ -59,7 +54,34 @@ class EscolherCanalAgendamentoView(ui.View):
             )
 
         async def callback(self, interaction):
-            await interaction.response.send_modal(NovoAgendamentoModal(self.view.cog, self.values[0].id))
+            await interaction.response.edit_message(
+                content="Escolha a frequência do agendamento:",
+                view=EscolherFrequenciaAgendamentoView(self.view.cog, self.values[0].id),
+            )
+
+
+class EscolherFrequenciaAgendamentoView(ui.View):
+    def __init__(self, cog, canal_id):
+        super().__init__(timeout=120)
+        self.cog, self.canal_id = cog, canal_id
+        self.add_item(self.EscolherFrequencia())
+
+    class EscolherFrequencia(ui.Select):
+        def __init__(self):
+            super().__init__(
+                placeholder="Escolha a frequência",
+                min_values=1,
+                max_values=1,
+                options=[
+                    discord.SelectOption(label="Uma única vez", value="unica", emoji="1️⃣"),
+                    discord.SelectOption(label="Diariamente", value="diario", emoji="🔁"),
+                    discord.SelectOption(label="Semanalmente", value="semanal", emoji="📅"),
+                ],
+            )
+
+        async def callback(self, interaction):
+            repeticao = None if self.values[0] == "unica" else self.values[0]
+            await interaction.response.send_modal(NovoAgendamentoModal(self.view.cog, self.view.canal_id, repeticao))
 
 
 class AgendamentoPanelView(ui.View):
