@@ -34,7 +34,10 @@ class NovoAgendamentoModal(ui.Modal, title="Novo agendamento"):
         texto = self.texto.value.strip()
         if not texto:
             await interaction.response.send_message("A mensagem não pode ficar vazia.", ephemeral=True); return
-        item = await self.cog.criar_agendamento(self.canal_id, momento, texto, self.repeticao_escolhida, interaction.user.id)
+        item = await self.cog.criar_agendamento(
+            self.canal_id, momento, texto, self.repeticao_escolhida,
+            interaction.user.id, criado_por_nome=interaction.user.display_name,
+        )
         await interaction.response.send_message(f"✅ Agendamento **ID {item['id']}** criado e enviado ao canal de avisos.", ephemeral=True)
 
 
@@ -164,9 +167,9 @@ class Agendados(commands.Cog):
     def _salvar(self): storage.save_json(DATA_FILE, {"itens": self.itens, "proximo_id": self.proximo_id})
     def buscar_item(self, item_id): return next((x for x in self.itens if x["id"] == item_id), None)
 
-    async def criar_agendamento(self, canal_id, momento, texto, repeticao, criado_por, imagem=None):
+    async def criar_agendamento(self, canal_id, momento, texto, repeticao, criado_por, imagem=None, criado_por_nome=None):
         item_id = self.proximo_id; self.proximo_id += 1
-        item = {"id":item_id, "canal_id":canal_id, "data_hora":momento.isoformat(), "texto":texto, "imagem":imagem, "criado_por":criado_por, "repeticao":repeticao}
+        item = {"id":item_id, "canal_id":canal_id, "data_hora":momento.isoformat(), "texto":texto, "imagem":imagem, "criado_por":criado_por, "criado_por_nome":criado_por_nome or str(criado_por), "repeticao":repeticao}
         self.itens.append(item); self._salvar()
         try: await self.criar_card(item)
         except Exception as erro: print(f"Erro ao criar card: {erro}")
@@ -190,7 +193,7 @@ class Agendados(commands.Cog):
         embed.add_field(name="Repetição", value=NOMES_REPETICAO.get(item.get("repeticao"), "não se repete"), inline=True)
         embed.add_field(name="Mensagem", value=item["texto"][:1024], inline=False)
         if detalhe: embed.add_field(name="Status", value=detalhe, inline=False)
-        embed.set_footer(text=f"Agendamento ID {item['id']} • Criado por {item.get('criado_por', 'desconhecido')}")
+        embed.set_footer(text=f"Agendamento ID {item['id']} • Criado por {item.get('criado_por_nome') or item.get('criado_por', 'desconhecido')}")
         return embed
 
     def registrar_view(self, item):
@@ -222,6 +225,14 @@ class Agendados(commands.Cog):
 
     async def sincronizar_cards(self):
         for item in self.itens:
+            if not item.get("criado_por_nome") and item.get("criado_por"):
+                try:
+                    usuario = self.bot.get_user(item["criado_por"]) or await self.bot.fetch_user(item["criado_por"])
+                    item["criado_por_nome"] = usuario.display_name
+                    self._salvar()
+                    await self.atualizar_card(item)
+                except Exception as erro:
+                    print(f"Não consegui identificar quem criou o agendamento {item['id']}: {erro}")
             if item.get("aviso_message_id"): self.registrar_view(item)
             else:
                 try: await self.criar_card(item)
@@ -254,7 +265,10 @@ class Agendados(commands.Cog):
             if anexo.content_type and anexo.content_type.startswith("image/"):
                 imagem = os.path.join(PASTA_IMAGENS, f"{item_id}{os.path.splitext(anexo.filename)[1] or '.png'}")
                 await anexo.save(imagem)
-        item = await self.criar_agendamento(ctx.channel.id, momento, texto, repeticao, ctx.author.id, imagem)
+        item = await self.criar_agendamento(
+            ctx.channel.id, momento, texto, repeticao, ctx.author.id, imagem,
+            criado_por_nome=ctx.author.display_name,
+        )
         await ctx.send(f"✅ Agendamento **ID {item['id']}** criado. O card foi enviado ao canal de avisos.")
         try: await ctx.message.delete()
         except Exception: pass
