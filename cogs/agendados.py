@@ -22,7 +22,9 @@ class NovoAgendamentoModal(ui.Modal, title="Novo agendamento"):
         self.data = ui.TextInput(label="Data", placeholder="DD/MM/AAAA", max_length=10)
         self.hora = ui.TextInput(label="Hora", placeholder="HH:MM", max_length=5)
         self.texto = ui.TextInput(label="Mensagem", style=discord.TextStyle.paragraph, max_length=4000)
+        self.imagem = ui.FileUpload(required=False, max_values=1)
         for campo in (self.data, self.hora, self.texto): self.add_item(campo)
+        self.add_item(ui.Label(text="Imagem (opcional)", description="Envie uma imagem para acompanhar a publicação.", component=self.imagem))
 
     async def on_submit(self, interaction):
         try:
@@ -34,9 +36,12 @@ class NovoAgendamentoModal(ui.Modal, title="Novo agendamento"):
         texto = self.texto.value.strip()
         if not texto:
             await interaction.response.send_message("A mensagem não pode ficar vazia.", ephemeral=True); return
+        imagem_anexo = self.imagem.values[0] if self.imagem.values else None
+        if imagem_anexo and (not imagem_anexo.content_type or not imagem_anexo.content_type.startswith("image/")):
+            await interaction.response.send_message("O arquivo enviado precisa ser uma imagem.", ephemeral=True); return
         item = await self.cog.criar_agendamento(
             self.canal_id, momento, texto, self.repeticao_escolhida,
-            interaction.user.id, criado_por_nome=interaction.user.display_name,
+            interaction.user.id, criado_por_nome=interaction.user.display_name, imagem_anexo=imagem_anexo,
         )
         await interaction.response.send_message(f"✅ Agendamento **ID {item['id']}** criado e enviado ao canal de avisos.", ephemeral=True)
 
@@ -128,10 +133,15 @@ class EditarAgendamentoModal(ui.Modal, title="Editar agendamento"):
 
 
 class AgendamentoCardView(ui.View):
-    def __init__(self, cog, item_id):
+    def __init__(self, cog, item):
         super().__init__(timeout=None)
-        self.cog, self.item_id = cog, item_id
-        self.editar.custom_id, self.cancelar.custom_id = f"agendados:editar:{item_id}", f"agendados:cancelar:{item_id}"
+        self.cog, self.item_id = cog, item["id"]
+        bloqueado = item.get("cancelamento_bloqueado", True)
+        self.editar.custom_id = f"agendados:editar:{self.item_id}"
+        self.travar.custom_id = f"agendados:travar:{self.item_id}"
+        self.cancelar.custom_id = f"agendados:cancelar:{self.item_id}"
+        self.travar.emoji = "🔒" if bloqueado else "🔓"
+        self.cancelar.disabled = bloqueado
 
     async def _item_admin(self, interaction):
         if not interaction.user.guild_permissions.administrator:
@@ -145,10 +155,23 @@ class AgendamentoCardView(ui.View):
         item = await self._item_admin(interaction)
         if item: await interaction.response.send_modal(EditarAgendamentoModal(self.cog, item))
 
+    @ui.button(emoji="🔒", style=discord.ButtonStyle.secondary, custom_id="agendados:travar")
+    async def travar(self, interaction, button):
+        item = await self._item_admin(interaction)
+        if item:
+            await interaction.response.defer(ephemeral=True)
+            item["cancelamento_bloqueado"] = not item.get("cancelamento_bloqueado", True)
+            self.cog._salvar()
+            await self.cog.atualizar_card(item)
+            estado = "travado" if item["cancelamento_bloqueado"] else "destravado"
+            await interaction.followup.send(f"🔐 Cancelamento {estado}.", ephemeral=True)
+
     @ui.button(label="Cancelar", emoji="❌", style=discord.ButtonStyle.danger, custom_id="agendados:cancelar")
     async def cancelar(self, interaction, button):
         item = await self._item_admin(interaction)
         if item:
+            if item.get("cancelamento_bloqueado", True):
+                await interaction.response.send_message("Destrave o cancelamento pelo botão de cadeado primeiro.", ephemeral=True); return
             await interaction.response.defer(ephemeral=True)
             await self.cog.cancelar_item(item, interaction.user)
             await interaction.followup.send("❌ Agendamento cancelado.", ephemeral=True)
@@ -167,9 +190,13 @@ class Agendados(commands.Cog):
     def _salvar(self): storage.save_json(DATA_FILE, {"itens": self.itens, "proximo_id": self.proximo_id})
     def buscar_item(self, item_id): return next((x for x in self.itens if x["id"] == item_id), None)
 
-    async def criar_agendamento(self, canal_id, momento, texto, repeticao, criado_por, imagem=None, criado_por_nome=None):
+    async def criar_agendamento(self, canal_id, momento, texto, repeticao, criado_por, imagem=None, criado_por_nome=None, imagem_anexo=None):
         item_id = self.proximo_id; self.proximo_id += 1
-        item = {"id":item_id, "canal_id":canal_id, "data_hora":momento.isoformat(), "texto":texto, "imagem":imagem, "criado_por":criado_por, "criado_por_nome":criado_por_nome or str(criado_por), "repeticao":repeticao}
+        if imagem_anexo:
+            extensao = os.path.splitext(imagem_anexo.filename)[1] or ".png"
+            imagem = os.path.join(PASTA_IMAGENS, f"{item_id}{extensao}")
+            await imagem_anexo.save(imagem)
+        item = {"id":item_id, "canal_id":canal_id, "data_hora":momento.isoformat(), "texto":texto, "imagem":imagem, "criado_por":criado_por, "criado_por_nome":criado_por_nome or str(criado_por), "repeticao":repeticao, "cancelamento_bloqueado":True}
         self.itens.append(item); self._salvar()
         try: await self.criar_card(item)
         except Exception as erro: print(f"Erro ao criar card: {erro}")
@@ -200,12 +227,12 @@ class Agendados(commands.Cog):
     def registrar_view(self, item):
         mensagem_id = item.get("aviso_message_id")
         if mensagem_id and mensagem_id not in self.views:
-            self.bot.add_view(AgendamentoCardView(self, item["id"]), message_id=mensagem_id); self.views.add(mensagem_id)
+            self.bot.add_view(AgendamentoCardView(self, item), message_id=mensagem_id); self.views.add(mensagem_id)
 
     async def criar_card(self, item):
         canal = await self.canal_avisos()
         if not canal: return
-        mensagem = await canal.send(embed=self.embed_card(item), view=AgendamentoCardView(self, item["id"]))
+        mensagem = await canal.send(embed=self.embed_card(item), view=AgendamentoCardView(self, item))
         item.update(aviso_channel_id=canal.id, aviso_message_id=mensagem.id)
         self._salvar(); self.registrar_view(item)
 
@@ -218,7 +245,7 @@ class Agendados(commands.Cog):
         if canal and mensagem_id:
             try:
                 mensagem = await canal.fetch_message(mensagem_id)
-                await mensagem.edit(embed=self.embed_card(item, status, detalhe), view=AgendamentoCardView(self, item["id"]) if status == "agendado" else None)
+                await mensagem.edit(embed=self.embed_card(item, status, detalhe), view=AgendamentoCardView(self, item) if status == "agendado" else None)
                 if status == "agendado": self.registrar_view(item)
                 return
             except Exception as erro: print(f"Erro ao atualizar card {item['id']}: {erro}")
@@ -226,6 +253,7 @@ class Agendados(commands.Cog):
 
     async def sincronizar_cards(self):
         for item in self.itens:
+            item.setdefault("cancelamento_bloqueado", True)
             if item.get("aviso_message_id"):
                 self.registrar_view(item)
                 try: await self.atualizar_card(item)
