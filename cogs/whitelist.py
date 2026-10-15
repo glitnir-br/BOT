@@ -7,6 +7,7 @@ from discord.ext import commands
 
 
 ARQUIVO_PADRAO = "/.config/unity3d/IronGate/Valheim/permittedlist.txt"
+ARQUIVO_BANIDOS_PADRAO = "/.config/unity3d/IronGate/Valheim/bannedlist.txt"
 STEAM_ID64 = re.compile(r"^\d{17}$")
 
 
@@ -34,6 +35,7 @@ class Whitelist(commands.Cog):
             "api_key": os.getenv("PTERODACTYL_API_KEY", ""),
             "server_id": ids.get(servidor, ""),
             "arquivo": os.getenv("PTERODACTYL_WHITELIST_PATH", ARQUIVO_PADRAO),
+            "arquivo_banidos": os.getenv("PTERODACTYL_BANLIST_PATH", ARQUIVO_BANIDOS_PADRAO),
         }
 
     @classmethod
@@ -132,11 +134,35 @@ class Whitelist(commands.Cog):
             if encontrado
         ]
 
+    async def verificar_banimentos(self, steam_id: str) -> list[str]:
+        """Retorna os servidores cuja lista de banidos contém a SteamID."""
+        servidores = self.configuracoes_servidores()
+        configurados = {
+            chave: dados for chave, dados in servidores.items()
+            if self.configuracao_valida(dados[1])
+        }
+        if len(configurados) != len(servidores):
+            raise RuntimeError("Os dois servidores Pterodactyl precisam estar configurados.")
+
+        resultados = await asyncio.gather(*(
+            self.steam_id_esta_banida(steam_id, dados[1])
+            for dados in configurados.values()
+        ))
+        return [
+            servidores[chave][0]
+            for (chave, _), encontrado in zip(configurados.items(), resultados)
+            if encontrado
+        ]
+
     async def steam_id_esta_na_whitelist(self, steam_id: str, config: dict) -> bool:
-        linhas = await self._ler_whitelist(config)
+        linhas = await self._ler_arquivo(config, config["arquivo"])
         return steam_id in linhas
 
-    async def _ler_whitelist(self, config: dict) -> list[str]:
+    async def steam_id_esta_banida(self, steam_id: str, config: dict) -> bool:
+        linhas = await self._ler_arquivo(config, config["arquivo_banidos"])
+        return steam_id in linhas
+
+    async def _ler_arquivo(self, config: dict, arquivo: str) -> list[str]:
         base = f'{config["panel"]}/api/client/servers/{config["server_id"]}/files'
         headers = {
             "Authorization": f'Bearer {config["api_key"]}',
@@ -145,7 +171,7 @@ class Whitelist(commands.Cog):
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(
-                f"{base}/contents", headers=headers, params={"file": config["arquivo"]}
+                f"{base}/contents", headers=headers, params={"file": arquivo}
             ) as resposta:
                 resposta.raise_for_status()
                 return (await resposta.text()).splitlines()

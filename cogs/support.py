@@ -906,6 +906,48 @@ class CategoriaModal(ui.Modal):
                 return
 
             try:
+                servidores_banidos = await whitelist_cog.verificar_banimentos(steamid)
+            except RuntimeError as erro:
+                print(f"[Whitelist] Configuração inválida: {erro}")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Avise a equipe e tente novamente mais tarde.",
+                    ephemeral=True,
+                )
+                return
+            except aiohttp.ClientResponseError as erro:
+                print(f"[Whitelist] Pterodactyl retornou HTTP {erro.status} ao consultar banimentos.")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Tente novamente em alguns minutos.",
+                    ephemeral=True,
+                )
+                return
+            except (aiohttp.ClientError, asyncio.TimeoutError) as erro:
+                print(f"[Whitelist] Erro de conexão ao consultar banimentos: {erro}")
+                await interaction.followup.send(
+                    "Não foi possível verificar sua SteamID agora. Tente novamente em alguns minutos.",
+                    ephemeral=True,
+                )
+                return
+
+            if servidores_banidos:
+                lista_servidores = " e ".join(servidores_banidos)
+                await interaction.followup.send(
+                    f"❌ Esta SteamID está banida no **{lista_servidores}**. "
+                    "Por isso, não foi possível abrir uma whitelist.",
+                    ephemeral=True,
+                )
+                await send_log(
+                    interaction.client,
+                    "Whitelist: SteamID Banida",
+                    f"{interaction.user.mention} tentou criar uma whitelist com a SteamID `{steamid}`, "
+                    f"banida no **{lista_servidores}**.",
+                    user=interaction.user,
+                    cor=discord.Color.red(),
+                    channel_id=config.CANAL_AVISOS_ID,
+                )
+                return
+
+            try:
                 servidores_encontrados = await whitelist_cog.verificar_servidores(steamid)
             except RuntimeError as erro:
                 print(f"[Whitelist] Configuração inválida: {erro}")
