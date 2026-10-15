@@ -51,7 +51,12 @@ class EscolherCanalAgendamentoView(ui.View):
 
     class EscolherCanal(ui.ChannelSelect):
         def __init__(self):
-            super().__init__(placeholder="Escolha o canal de publicação", channel_types=[discord.ChannelType.text], min_values=1, max_values=1)
+            super().__init__(
+                placeholder="Escolha o canal de publicação",
+                channel_types=[discord.ChannelType.text, discord.ChannelType.news],
+                min_values=1,
+                max_values=1,
+            )
 
         async def callback(self, interaction):
             await interaction.response.send_modal(NovoAgendamentoModal(self.view.cog, self.values[0].id))
