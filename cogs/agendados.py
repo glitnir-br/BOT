@@ -191,9 +191,10 @@ class Agendados(commands.Cog):
         embed.add_field(name="Quando", value=momento.strftime("%d/%m/%Y às %H:%M"), inline=True)
         embed.add_field(name="Destino", value=destino.mention if destino else f"ID `{item['canal_id']}`", inline=True)
         embed.add_field(name="Repetição", value=NOMES_REPETICAO.get(item.get("repeticao"), "não se repete"), inline=True)
+        embed.add_field(name="Criado por", value=f"<@{item['criado_por']}>", inline=True)
         embed.add_field(name="Mensagem", value=item["texto"][:1024], inline=False)
         if detalhe: embed.add_field(name="Status", value=detalhe, inline=False)
-        embed.set_footer(text=f"Agendamento ID {item['id']} • Criado por {item.get('criado_por_nome') or item.get('criado_por', 'desconhecido')}")
+        embed.set_footer(text=f"Agendamento ID {item['id']}")
         return embed
 
     def registrar_view(self, item):
@@ -225,15 +226,10 @@ class Agendados(commands.Cog):
 
     async def sincronizar_cards(self):
         for item in self.itens:
-            if not item.get("criado_por_nome") and item.get("criado_por"):
-                try:
-                    usuario = self.bot.get_user(item["criado_por"]) or await self.bot.fetch_user(item["criado_por"])
-                    item["criado_por_nome"] = usuario.display_name
-                    self._salvar()
-                    await self.atualizar_card(item)
-                except Exception as erro:
-                    print(f"Não consegui identificar quem criou o agendamento {item['id']}: {erro}")
-            if item.get("aviso_message_id"): self.registrar_view(item)
+            if item.get("aviso_message_id"):
+                self.registrar_view(item)
+                try: await self.atualizar_card(item)
+                except Exception as erro: print(f"Erro ao atualizar card {item['id']}: {erro}")
             else:
                 try: await self.criar_card(item)
                 except Exception as erro: print(f"Erro ao criar card {item['id']}: {erro}")
