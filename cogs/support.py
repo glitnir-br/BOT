@@ -48,6 +48,20 @@ async def montar_embeds_extra_doacao(bot):
 
     return embeds
 
+
+async def montar_embed_pix(bot):
+    """Monta o embed do QR Code/PIX já usado no painel de doações."""
+    if not os.path.exists(IMAGEM_PIX):
+        return None
+
+    url = await obter_url_cacheada(bot, IMAGEM_PIX, "doacao_pix.png", config.CANAL_LOG_ID)
+    if not url:
+        return None
+
+    embed = discord.Embed(title="🔑 Chave PIX", color=config.COR_GLITNIR)
+    embed.set_image(url=url)
+    return embed
+
 # Opções de valor pro ticket de Doações — aparecem como menu de seleção, não texto livre
 VALORES_DOACAO = [
     "R$ 15,00 - 4 GC",
@@ -79,7 +93,7 @@ PERGUNTAS = {
     ],
     "VIP": [
         {"label": "Qual o Nickname no jogo?", "max_length": 50},
-        {"label": "Qual sua ID Steam?", "max_length": 50},
+        {"label": "Qual sua ID Steam?", "placeholder": "Ex: 76561198000000000", "max_length": 17},
     ],
     "Whitelist": [
         {"label": "Nickname usado no jogo:", "max_length": 20},
@@ -1172,10 +1186,40 @@ def embed_painel_vip() -> tuple[discord.Embed, discord.File | None]:
     embed = discord.Embed(
         title="👑 PACOTES VIP GLITNIR",
         description=(
-            "Escolha seu pacote VIP e preencha o formulário para enviar seus dados à equipe.\n\n"
-            "*Após escolher o pacote, um ticket privado será aberto para o atendimento.*"
+            "Escolha seu pacote VIP abaixo. Após a compra, você recebe uma **moeda VIP** "
+            "para resgatar os itens no NPC. A liberação dos wards e do território deve ser "
+            "solicitada à administração.\n\n"
+            "**Os pacotes podem ser comprados novamente**, entregando os itens a cada resgate. "
+            "O limite de wards e o território não acumulam, e sua categoria VIP mais alta é preservada.\n\n"
+            "*Clique no botão para ver o QR Code/PIX, escolher o pacote e abrir seu ticket.*"
         ),
         color=CORES_CATEGORIA["VIP"],
+    )
+    embed.add_field(
+        name="🛡️ VIP Midgard — R$ 50,00",
+        value=(
+            "Inclui **8 Moedas Glitnir**, **1 Runa de Odin** e **1 Foice Eterna**, "
+            "com durabilidade infinita. Libera **3 wards** e **1 território com 30 metros de raio**."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="⚔️ VIP Asgard — R$ 100,00",
+        value=(
+            "Inclui **18 Moedas Glitnir**, **2 Runas de Odin**, **1 Foice Eterna** e "
+            "**1 Enxada Eterna**, ambas com durabilidade infinita. Libera **3 wards** e "
+            "**1 território com 50 metros de raio**."
+        ),
+        inline=False,
+    )
+    embed.add_field(
+        name="👑 VIP Valhalla — R$ 150,00",
+        value=(
+            "Inclui **30 Moedas Glitnir**, **3 Runas de Odin** e o conjunto completo: "
+            "**Foice Eterna, Enxada Eterna e Martelo Eterno**, todos com durabilidade infinita. "
+            "Libera **3 wards** e **1 território com 80 metros de raio**."
+        ),
+        inline=False,
     )
 
     arquivo = None
@@ -1193,8 +1237,13 @@ class VipPanelView(ui.View):
     @ui.button(label="Comprar VIP", emoji="👑", style=discord.ButtonStyle.success, custom_id="support:vip_solicitar")
     async def solicitar(self, interaction: discord.Interaction, button: ui.Button):
         view = PacoteVipView()
+        embed_pix = await montar_embed_pix(interaction.client)
         await interaction.response.send_message(
-            content="Escolha o pacote VIP desejado:",
+            content=(
+                "Use o QR Code/PIX abaixo para realizar o pagamento, escolha o pacote VIP "
+                "e envie o comprovante no ticket após preenchê-lo:"
+            ),
+            embed=embed_pix,
             view=view,
             ephemeral=True,
         )
