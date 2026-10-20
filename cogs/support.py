@@ -19,6 +19,9 @@ IMAGEM_TICKET = os.path.join(ASSETS_DIR, "ticket.png")
 IMAGEM_VALORES = os.path.join(ASSETS_DIR, "doacao_valores.png")
 IMAGEM_PIX = os.path.join(ASSETS_DIR, "doacao_pix.png")
 
+# Imagem exibida no painel de Pacotes VIP
+IMAGEM_VIP = os.path.join(ASSETS_DIR, "glitnir_vip.png")
+
 # Imagem de instruções pra deixar o perfil Steam público (Whitelist)
 IMAGEM_STEAM_PUBLICO = os.path.join(ASSETS_DIR, "whitelist_steam.png")
 STEAM_ID64 = re.compile(r"^\d{17}$")
@@ -54,6 +57,13 @@ VALORES_DOACAO = [
     "R$ 250,00 - 120 GC",
 ]
 
+# Opções de pacote VIP — aparecem como menu de seleção antes do formulário.
+PACOTES_VIP = [
+    "Midgard — R$ 50,00",
+    "Asgard — R$ 100,00",
+    "Valhalla — R$ 150,00",
+]
+
 # Perguntas do formulário de cada categoria: (label, estilo, placeholder, tamanho_max)
 PERGUNTAS = {
     "Dúvidas": [
@@ -64,6 +74,10 @@ PERGUNTAS = {
         {"label": "Descreva o problema encontrado", "style": discord.TextStyle.paragraph, "max_length": 500},
     ],
     "Doações": [
+        {"label": "Qual o Nickname no jogo?", "max_length": 50},
+        {"label": "Qual sua ID Steam?", "max_length": 50},
+    ],
+    "VIP": [
         {"label": "Qual o Nickname no jogo?", "max_length": 50},
         {"label": "Qual sua ID Steam?", "max_length": 50},
     ],
@@ -100,6 +114,7 @@ EMOJIS = {
     "Dúvidas": "💡",
     "Suporte": "🎫",
     "Doações": "💰",
+    "VIP": "👑",
     "Whitelist": "📋",
     "Chat de Guilda": "💬",
     "Território de Guilda": "🗺️",
@@ -112,6 +127,7 @@ CORES_CATEGORIA = {
     "Suporte": discord.Color.red(),
     "Dúvidas": discord.Color.gold(),
     "Doações": discord.Color.from_rgb(255, 140, 0),  # laranja, cor de moeda
+    "VIP": discord.Color.from_rgb(255, 215, 0),
     "Chat de Guilda": discord.Color.blue(),
     "Território de Guilda": discord.Color.dark_teal(),
     "Envio de Dados": discord.Color.blurple(),
@@ -1132,6 +1148,59 @@ class DoacaoPanelView(ui.View):
         view.mensagem_para_apagar = await interaction.original_response()
 
 
+class PacoteVipSelect(ui.Select):
+    def __init__(self):
+        options = [discord.SelectOption(label=pacote) for pacote in PACOTES_VIP]
+        super().__init__(placeholder="Escolha seu pacote VIP...", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        pacote_escolhido = self.values[0]
+        respostas_extras = [("Pacote VIP escolhido", pacote_escolhido)]
+        await interaction.response.send_modal(
+            CategoriaModal("VIP", respostas_extras, mensagem_para_apagar=self.view.mensagem_para_apagar)
+        )
+
+
+class PacoteVipView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=180)
+        self.mensagem_para_apagar = None
+        self.add_item(PacoteVipSelect())
+
+
+def embed_painel_vip() -> tuple[discord.Embed, discord.File | None]:
+    embed = discord.Embed(
+        title="👑 PACOTES VIP GLITNIR",
+        description=(
+            "Escolha seu pacote VIP e preencha o formulário para enviar seus dados à equipe.\n\n"
+            "*Após escolher o pacote, um ticket privado será aberto para o atendimento.*"
+        ),
+        color=CORES_CATEGORIA["VIP"],
+    )
+
+    arquivo = None
+    if os.path.exists(IMAGEM_VIP):
+        arquivo = discord.File(IMAGEM_VIP, filename="glitnir_vip.png")
+        embed.set_image(url="attachment://glitnir_vip.png")
+
+    return embed, arquivo
+
+
+class VipPanelView(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Comprar VIP", emoji="👑", style=discord.ButtonStyle.success, custom_id="support:vip_solicitar")
+    async def solicitar(self, interaction: discord.Interaction, button: ui.Button):
+        view = PacoteVipView()
+        await interaction.response.send_message(
+            content="Escolha o pacote VIP desejado:",
+            view=view,
+            ephemeral=True,
+        )
+        view.mensagem_para_apagar = await interaction.original_response()
+
+
 def embed_painel_envio_dados() -> discord.Embed:
     embed = discord.Embed(
         title="🎫 TICKET — ENVIO DE DADOS",
@@ -1254,6 +1323,7 @@ class SupportCog(commands.Cog):
         self.bot.add_view(WhitelistTicketView())
         self.bot.add_view(GuildaPanelView())
         self.bot.add_view(DoacaoPanelView())
+        self.bot.add_view(VipPanelView())
         self.bot.add_view(EnvioDadosPanelView())
 
     @commands.Cog.listener()
@@ -1328,6 +1398,20 @@ class SupportCog(commands.Cog):
             await ctx.message.delete()
         except Exception as e:
             print(f"Não consegui apagar a mensagem de comando (!doacao_painel): {e}")
+
+    @commands.command(name="vip_painel")
+    @commands.has_permissions(administrator=True)
+    async def vip_painel(self, ctx: commands.Context):
+        """Publica o painel dedicado de Pacotes VIP no canal atual."""
+        embed, arquivo = embed_painel_vip()
+        if arquivo:
+            await ctx.send(embed=embed, file=arquivo, view=VipPanelView())
+        else:
+            await ctx.send(embed=embed, view=VipPanelView())
+        try:
+            await ctx.message.delete()
+        except Exception as e:
+            print(f"Não consegui apagar a mensagem de comando (!vip_painel): {e}")
 
     @commands.command(name="envio_dados_painel")
     @commands.has_permissions(administrator=True)

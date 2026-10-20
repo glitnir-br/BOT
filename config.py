@@ -59,6 +59,8 @@ CATEGORIAS_POR_TIPO = {
     "Dúvidas": _int_env("CATEGORIA_DUVIDAS_ID"),
     "Suporte": _int_env("CATEGORIA_SUPORTE_ID"),
     "Doações": _int_env("CATEGORIA_DOACOES_ID"),
+    # Se não houver uma categoria própria de VIP, usa a mesma dos tickets de doações.
+    "VIP": _int_env("CATEGORIA_VIP_ID") or _int_env("CATEGORIA_DOACOES_ID"),
     "Whitelist": _int_env("CATEGORIA_WHITELIST_ID"),
     "Chat de Guilda": _int_env("CATEGORIA_CHAT_GUILDA_ID"),
     "Território de Guilda": _int_env("CATEGORIA_TERRITORIO_GUILDA_ID"),
