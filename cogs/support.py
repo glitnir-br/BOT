@@ -94,6 +94,7 @@ PERGUNTAS = {
     "VIP": [
         {"label": "Qual o Nickname no jogo?", "max_length": 50},
         {"label": "Qual sua ID Steam?", "placeholder": "Ex: 76561198000000000", "max_length": 17},
+        {"label": "Em qual servidor você está jogando?", "max_length": 100},
     ],
     "Whitelist": [
         {"label": "Nickname usado no jogo:", "max_length": 20},
