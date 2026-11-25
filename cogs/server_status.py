@@ -16,8 +16,8 @@ FALHAS_PARA_BACKOFF = 5
 WORLD_BIOME = os.getenv("WORLD_BIOME", "Prado")
 
 SERVIDORES = (
-    {"nome": "Glitnir Northbound - Server 1", "ip": "162.43.190.115", "porta": 2461},
-    {"nome": "Glitnir Northbound - Server 2", "ip": "162.43.190.115", "porta": 2457},
+    {"nome": "Glitnir Awakening - Server 1", "ip": "162.43.190.115", "porta": 2501},
+    {"nome": "Glitnir Awakening - Server 2", "ip": "162.43.190.115", "porta": 2051},
 )
 
 
