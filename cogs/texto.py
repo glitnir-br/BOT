@@ -1,8 +1,56 @@
 from discord.ext import commands
 import discord
 from pathlib import Path
+import asyncio
+from datetime import timedelta
 
 import config
+
+
+async def tentar_com_limite(operacao):
+    for tentativa in range(6):
+        try:
+            return await operacao()
+        except discord.HTTPException as erro:
+            if erro.status != 429 or tentativa == 5:
+                raise
+            espera = getattr(erro, "retry_after", None)
+            if espera is None:
+                try:
+                    espera = float(erro.response.headers.get("Retry-After", 0))
+                except (AttributeError, TypeError, ValueError):
+                    espera = 0
+            await asyncio.sleep(max(float(espera or 0), min(30 * (2 ** tentativa), 300)))
+
+
+async def limpar_mensagens(canal, aviso, motivo):
+    removidas = 0
+    cursor = discord.Object(id=aviso.id)
+    while True:
+        async def buscar():
+            return [mensagem async for mensagem in canal.history(limit=100, before=cursor)]
+        pagina = await tentar_com_limite(buscar)
+        if not pagina:
+            return removidas
+        cursor = pagina[-1]
+        recentes, antigas = [], []
+        limite = discord.utils.utcnow() - timedelta(days=14, minutes=-5)
+        for mensagem in pagina:
+            if not mensagem.pinned:
+                (recentes if mensagem.created_at > limite else antigas).append(mensagem)
+        if len(recentes) >= 2:
+            await tentar_com_limite(lambda: canal.delete_messages(recentes, reason=motivo))
+            removidas += len(recentes)
+            await asyncio.sleep(2)
+        else:
+            antigas.extend(recentes)
+        for mensagem in antigas:
+            try:
+                await tentar_com_limite(lambda: mensagem.delete(reason=motivo))
+                removidas += 1
+            except discord.NotFound:
+                continue
+            await asyncio.sleep(1.5)
 
 
 class ConfirmarLimpeza(discord.ui.View):
@@ -25,20 +73,16 @@ class ConfirmarLimpeza(discord.ui.View):
         self.processando = True
         await interaction.response.edit_message(content="Limpeza em andamento. Isso pode levar algum tempo.", view=None)
         try:
-            removidas = await interaction.channel.purge(
-                limit=None, check=lambda mensagem: mensagem.id != interaction.message.id and not mensagem.pinned,
-                reason=f"Limpeza solicitada por {interaction.user} ({interaction.user.id})",
+            removidas = await limpar_mensagens(
+                interaction.channel, interaction.message,
+                motivo=f"Limpeza solicitada por {interaction.user} ({interaction.user.id})",
             )
         except discord.HTTPException as erro:
             print(f"[Limpeza] Falha no canal {interaction.channel_id}: {erro}")
-            await interaction.followup.send("A limpeza foi interrompida. Algumas mensagens podem já ter sido apagadas.", ephemeral=True)
+            await interaction.message.edit(content="A limpeza foi interrompida. Algumas mensagens podem já ter sido apagadas.", view=None)
         else:
-            await interaction.followup.send(f"Limpeza concluída: {len(removidas)} mensagem(ns) apagada(s).", ephemeral=True)
+            await interaction.message.edit(content=f"Limpeza concluída: {removidas} mensagem(ns) apagada(s).", view=None)
         finally:
-            try:
-                await interaction.message.delete()
-            except discord.HTTPException:
-                pass
             self.stop()
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
@@ -67,7 +111,7 @@ class Texto(commands.Cog):
             return
         view = ConfirmarLimpeza(ctx.author.id)
         aviso = await ctx.send(
-            f"⚠️ **Apagar as mensagens deste canal ({ctx.channel.mention})?** "
+            f"⚠️ **Apagar as mensagens anteriores a este aviso em {ctx.channel.mention}?** "
             "Mensagens fixadas serão preservadas. A exclusão não pode ser desfeita. Confirme em até 60 segundos.",
             view=view,
         )
