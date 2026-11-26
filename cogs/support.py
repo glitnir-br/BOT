@@ -1425,7 +1425,7 @@ class SupportCog(commands.Cog):
     @commands.command(name="guilda_painel")
     @commands.has_permissions(administrator=True)
     async def guilda_painel(self, ctx: commands.Context):
-        """Publica o painel dedicado de Chat de Guilda / Território de Guilda."""
+        """Publica o painel para criação e consulta de guildas."""
         from cogs.guildas import DESCRICAO_PAINEL, PainelGuildas
         embed = discord.Embed(description=DESCRICAO_PAINEL, color=config.COR_GLITNIR)
         await ctx.send(embed=embed, view=PainelGuildas())
@@ -1475,8 +1475,9 @@ class SupportCog(commands.Cog):
     ):
         """Cria um ticket manualmente pra um membro específico, sem passar pelo painel.
         Ex: !criar_ticket Suporte @Fulano Motivo do chamado (opcional)"""
-        if categoria not in PERGUNTAS:
-            categorias_validas = ", ".join(PERGUNTAS.keys())
+        categorias_ativas = [nome for nome in PERGUNTAS if nome not in ("Chat de Guilda", "Território de Guilda")]
+        if categoria not in categorias_ativas:
+            categorias_validas = ", ".join(categorias_ativas)
             await ctx.send(
                 f"Categoria inválida. Use uma dessas (com o nome exato): {categorias_validas}",
                 delete_after=15,

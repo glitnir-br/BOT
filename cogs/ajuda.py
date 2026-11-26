@@ -12,11 +12,11 @@ DESCRICOES = {
     "doacao_painel": "Publica o painel de doações.",
     "vip_painel": "Publica o painel VIP.",
     "envio_dados_painel": "Publica o painel de envio de dados.",
-    "criar_ticket": "Abre um ticket para um membro: `!criar_ticket Categoria @membro [motivo]`.",
+    "criar_ticket": "Abre ticket para um membro: `!criar_ticket \"Envio de Dados\" @membro [motivo]`. Use aspas em categorias com espaços.",
     "fechar": "Fecha o ticket em que o comando for usado.",
     "guilda_lider": "Define o líder da guilda: `!guilda_lider @membro` no canal da guilda.",
-    "whitelist_test": "Valida uma SteamID sem alterar a whitelist: `!whitelist_test <SteamID64>`.",
-    "whitelist_add": "Adiciona uma SteamID ao Server 1: `!whitelist_add <SteamID64>`.",
+    "whitelist_test": "Valida o formato da SteamID e mostra a configuração local, sem testar a conexão: `!whitelist_test <SteamID64>`.",
+    "whitelist_add": "Adiciona diretamente ao Server 1, sem consultar banimentos: `!whitelist_add <SteamID64>`.",
     "remover_cargo_whitelist": "Remove o cargo de whitelist dos membros após confirmação.",
     "guia_modpack": "Publica o guia do modpack no canal configurado.",
     "painel_modpack": "Publica o painel de atualização do código do modpack.",
@@ -29,23 +29,31 @@ DESCRICOES = {
     "testar_boasvindas": "Testa a mensagem de boas-vindas.",
 }
 
+CATEGORIAS_AJUDA = {
+    "📋 Painéis": (
+        "ticket_painel", "whitelist_painel", "guilda_painel", "doacao_painel",
+        "vip_painel", "envio_dados_painel", "painel_mensagens", "painel_modpack", "cargo_painel",
+    ),
+    "🛡️ Gestão": ("criar_ticket", "fechar", "guilda_lider", "remover_cargo_whitelist", "whitelist_add"),
+    "📢 Publicações": ("guia_modpack", "regras", "text", "editar", "anunciar"),
+}
+
 
 class AjudaGlitnir(commands.DefaultHelpCommand):
     async def send_bot_help(self, mapping):
         comandos = await self.filter_commands(self.context.bot.commands, sort=True)
-        blocos = []
-        for comando in comandos:
-            descricao = DESCRICOES.get(comando.qualified_name, comando.short_doc or "Consulte os detalhes do comando.")
-            blocos.append(f"`{self.context.clean_prefix}{comando.qualified_name}` — {descricao}")
-        embeds = []
-        atual = ""
-        for linha in blocos:
-            if len(atual) + len(linha) + 1 > 3500:
-                embeds.append(discord.Embed(title="📖 Comandos de Glitnir", description=atual, color=config.COR_GLITNIR))
-                atual = ""
-            atual += linha + "\n"
-        if atual:
-            embeds.append(discord.Embed(title="📖 Comandos de Glitnir", description=atual, color=config.COR_GLITNIR))
-        for embed in embeds:
-            embed.set_footer(text="A lista mostra os comandos que você pode usar aqui. Use !help <comando> para detalhes.")
-            await self.get_destination().send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
+        disponiveis = {comando.qualified_name: comando for comando in comandos}
+        secoes = []
+        for titulo, nomes in CATEGORIAS_AJUDA.items():
+            linhas = [f"`{self.context.clean_prefix}{nome}` — {DESCRICOES[nome]}"
+                      for nome in nomes if nome in disponiveis]
+            if linhas:
+                secoes.append((titulo, "\n".join(linhas)))
+        if not secoes:
+            await self.get_destination().send("Não há comandos administrativos disponíveis para você neste canal.")
+            return
+        embed = discord.Embed(title="📖 Comandos de Glitnir", color=config.COR_GLITNIR)
+        for titulo, texto in secoes:
+            embed.add_field(name=titulo, value=texto, inline=False)
+        embed.set_footer(text="Comandos de administração disponíveis aqui. Use !help <comando> para detalhes.")
+        await self.get_destination().send(embed=embed, allowed_mentions=discord.AllowedMentions.none())

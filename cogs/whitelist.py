@@ -127,7 +127,7 @@ class Whitelist(commands.Cog):
     @commands.command(name="whitelist_test")
     @commands.has_permissions(administrator=True)
     async def whitelist_test(self, ctx, steam_id: str):
-        """Simula a inclusão sem fazer qualquer chamada à API."""
+        """Valida o formato da SteamID e mostra a configuração; não testa a API nem adiciona o jogador."""
         if not self.steam_id_valido(steam_id):
             await ctx.send("SteamID inválida. Use uma SteamID64 com 17 dígitos.")
             return
@@ -145,7 +145,7 @@ class Whitelist(commands.Cog):
     @commands.command(name="whitelist_add")
     @commands.has_permissions(administrator=True)
     async def whitelist_add(self, ctx, steam_id: str):
-        """Inclui uma SteamID64 no permittedlist.txt pelo Pterodactyl."""
+        """Adiciona uma SteamID64 diretamente ao Server 1, sem consultar a lista de banidos."""
         if not self.steam_id_valido(steam_id):
             await ctx.send("SteamID inválida. Use uma SteamID64 com 17 dígitos.")
             return
