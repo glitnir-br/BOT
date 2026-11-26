@@ -104,9 +104,9 @@ PERGUNTAS = {
             "min_length": 17,
             "max_length": 17,
         },
-        {"label": "Você já jogou em outra season?", "max_length": 100},
-        {"label": "Algum amigo joga no servidor? Se sim, quem?", "style": discord.TextStyle.paragraph, "max_length": 200},
+        {"label": "Jogou outra season? Algum amigo joga?", "style": discord.TextStyle.paragraph, "placeholder": "Conte se já jogou e, se tiver amigos no servidor, quem são", "max_length": 300},
         {"label": "Deixou sua ID Steam pública?", "max_length": 20},
+        {"label": "Servidor de preferência (opcional)", "placeholder": "Server 1 ou Server 2; sujeito às vagas disponíveis", "description": "A preferência depende do número de vagas disponíveis em cada servidor.", "max_length": 100, "obrigatorio": False},
     ],
     "Chat de Guilda": [
         {"label": "Quais os membros da sua guilda?", "style": discord.TextStyle.paragraph, "placeholder": "Liste os membros (nicknames)", "max_length": 500},
