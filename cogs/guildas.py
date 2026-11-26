@@ -72,6 +72,13 @@ class PainelGuildas(discord.ui.View):
 
     @discord.ui.button(label="Criar chat de guilda", emoji="🛡️", style=discord.ButtonStyle.primary, custom_id="guildas:criar")
     async def criar(self, interaction, button):
+        cog = interaction.client.get_cog("Guildas")
+        if not cog:
+            await interaction.response.send_message("Sistema de guildas indisponível.", ephemeral=True)
+            return
+        if cog.lider_de_outra(interaction.guild_id, interaction.user.id):
+            await interaction.response.send_message("Você já é líder de uma guilda e não pode criar outra.", ephemeral=True)
+            return
         await interaction.response.send_modal(FormularioGuilda())
 
     @discord.ui.button(label="Minhas guildas", emoji="📋", style=discord.ButtonStyle.secondary, custom_id="guildas:minhas")
