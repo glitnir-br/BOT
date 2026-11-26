@@ -1311,7 +1311,8 @@ class GuildaDropdown(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         from cogs.guildas import DESCRICAO_PAINEL, PainelGuildas
-        await interaction.response.edit_message(content=DESCRICAO_PAINEL, embed=None, view=PainelGuildas())
+        embed = discord.Embed(description=DESCRICAO_PAINEL, color=config.COR_GLITNIR)
+        await interaction.response.edit_message(content=None, embed=embed, view=PainelGuildas())
 
 
 class GuildaPanelView(ui.View):
@@ -1426,7 +1427,8 @@ class SupportCog(commands.Cog):
     async def guilda_painel(self, ctx: commands.Context):
         """Publica o painel dedicado de Chat de Guilda / Território de Guilda."""
         from cogs.guildas import DESCRICAO_PAINEL, PainelGuildas
-        await ctx.send(DESCRICAO_PAINEL, view=PainelGuildas())
+        embed = discord.Embed(description=DESCRICAO_PAINEL, color=config.COR_GLITNIR)
+        await ctx.send(embed=embed, view=PainelGuildas())
         try:
             await ctx.message.delete()
         except Exception as e:
