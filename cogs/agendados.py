@@ -99,16 +99,47 @@ class PainelMensagens(ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @ui.button(label="Enviar mensagem", emoji="📨", style=discord.ButtonStyle.primary, custom_id="mensagens:enviar")
-    async def enviar(self, interaction, button):
+    async def canal_direto(self, interaction, nome):
         if not administrador(interaction):
             await interaction.response.send_message("Apenas administradores podem enviar mensagens.", ephemeral=True)
             return
-        canais = canais_permitidos(interaction.guild)
+        canal = next((canal for nome_canal, canal in canais_permitidos(interaction.guild) if nome_canal == nome), None)
+        if not canal:
+            await interaction.response.send_message(f"O canal {nome} não está configurado ou acessível.", ephemeral=True)
+            return
+        await interaction.response.send_modal(MensagemModal(canal.id, interaction.user.id))
+
+    @ui.button(label="Avisos internos", emoji="📢", style=discord.ButtonStyle.primary, custom_id="mensagens:avisos_internos")
+    async def avisos(self, interaction, button):
+        await self.canal_direto(interaction, "Avisos internos")
+
+    @ui.button(label="Chat geral", emoji="💬", style=discord.ButtonStyle.primary, custom_id="mensagens:chat_geral")
+    async def geral(self, interaction, button):
+        await self.canal_direto(interaction, "Chat geral")
+
+    @ui.button(label="Outros canais", emoji="📂", style=discord.ButtonStyle.secondary, custom_id="mensagens:outros")
+    async def outros(self, interaction, button):
+        if not administrador(interaction):
+            await interaction.response.send_message("Apenas administradores podem enviar mensagens.", ephemeral=True)
+            return
+        canais = [(nome, canal) for nome, canal in canais_permitidos(interaction.guild)
+                  if nome in ("Anúncios", "Anúncios do Sjar", "Chat Admin")]
         if not canais:
-            await interaction.response.send_message("Nenhum canal de envio está configurado ou acessível.", ephemeral=True)
+            await interaction.response.send_message("Nenhum dos outros canais está configurado ou acessível.", ephemeral=True)
             return
         await interaction.response.send_message("Escolha o canal para publicar a mensagem:", view=EscolhaCanalView(interaction.user.id, canais), ephemeral=True)
+
+
+class PainelMensagensAntigo(ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @ui.button(label="Enviar mensagem", style=discord.ButtonStyle.primary, custom_id="mensagens:enviar")
+    async def atualizar(self, interaction, button):
+        if not administrador(interaction):
+            await interaction.response.send_message("Apenas administradores podem usar o painel.", ephemeral=True)
+            return
+        await interaction.response.edit_message(embed=embed_painel(), view=PainelMensagens())
 
 
 class PainelAntigo(ui.View):
@@ -125,7 +156,8 @@ class PainelAntigo(ui.View):
 
 def embed_painel():
     return discord.Embed(title="📨 Enviador de mensagens", description=(
-        "Clique em **Enviar mensagem**, escolha o canal e escreva o texto. "
+        "Escolha **Avisos internos** ou **Chat geral** diretamente, ou use **Outros canais** para anúncios e chat da staff. "
+        "Depois, escreva o texto. "
         "Você também pode anexar uma imagem. A mensagem será publicada imediatamente "
         "em um card, com **@everyone** fora dele."
     ), color=config.COR_GLITNIR)
@@ -137,6 +169,7 @@ class Agendados(commands.Cog):
 
     async def cog_load(self):
         self.bot.add_view(PainelMensagens())
+        self.bot.add_view(PainelMensagensAntigo())
         self.bot.add_view(PainelAntigo())
 
     @commands.command(name="painel_mensagens")
