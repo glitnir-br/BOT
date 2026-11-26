@@ -46,6 +46,7 @@ LOG_ABERTOS_ID = _int_env("LOG_ABERTOS_ID") or CANAL_LOG_ID
 LOG_FECHADOS_ID = _int_env("LOG_FECHADOS_ID") or CANAL_LOG_ID
 CANAL_AVISOS_ID = _int_env("CANAL_AVISOS_ID") or CANAL_LOG_ID  # avisos de segurança, como tentativa de whitelist banida
 CANAL_BOT_MANAGER_ID = _int_env("CANAL_BOT_MANAGER_ID")  # painel de criação de agendamentos
+CANAL_AVISOS_INTERNOS_ID = _int_env("CANAL_AVISOS_INTERNOS_ID")  # atualizações do modpack
 
 # --- Integração Base44 (sincroniza a whitelist aprovada com a tabela de players) ---
 WHITELIST_TOKEN = os.getenv("WHITELIST_TOKEN", "")  # token secreto compartilhado com o Base44 (header x-whitelist-token)

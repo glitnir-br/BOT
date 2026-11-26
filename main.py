@@ -26,6 +26,7 @@ EXTENSIONS = [
     "cogs.server_status",
     "cogs.whitelist",
     "cogs.guildas",
+    "cogs.modpack",
 ]
 
 
