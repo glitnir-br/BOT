@@ -54,6 +54,39 @@ class CodigoModal(discord.ui.Modal, title="Atualizar código do modpack"):
         await cog.atualizar(interaction, codigo)
 
 
+class ConfirmarRemocaoCodigo(discord.ui.View):
+    def __init__(self, autor_id, codigo):
+        super().__init__(timeout=60)
+        self.autor_id = autor_id
+        self.codigo = codigo
+        self.processado = False
+
+    async def interaction_check(self, interaction):
+        if not interaction.guild or interaction.user.id != self.autor_id or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Somente o administrador que iniciou a remoção pode confirmá-la.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirmar remoção", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction, button):
+        if self.processado:
+            await interaction.response.send_message("Esta solicitação já foi processada.", ephemeral=True)
+            return
+        self.processado = True
+        self.stop()
+        await interaction.response.edit_message(content="Removendo o código...", view=None)
+        cog = interaction.client.get_cog("Modpack")
+        if not cog:
+            await interaction.followup.send("O sistema de modpack está indisponível.", ephemeral=True)
+            return
+        await cog.remover_codigo(interaction, self.codigo)
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction, button):
+        self.stop()
+        await interaction.response.edit_message(content="Remoção cancelada.", view=None)
+
+
 class PainelModpack(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
@@ -64,6 +97,24 @@ class PainelModpack(discord.ui.View):
             await interaction.response.send_message("Somente administradores podem atualizar o código.", ephemeral=True)
             return
         await interaction.response.send_modal(CodigoModal())
+
+    @discord.ui.button(label="Remover código", emoji="🗑️", style=discord.ButtonStyle.danger, custom_id="modpack:remover")
+    async def remover(self, interaction, button):
+        if not interaction.guild or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Somente administradores podem remover o código.", ephemeral=True)
+            return
+        cog = interaction.client.get_cog("Modpack")
+        dados = cog.dados.get(str(interaction.guild_id), {}) if cog else {}
+        codigo = dados.get("codigo")
+        if not cog:
+            await interaction.response.send_message("O sistema de modpack está indisponível.", ephemeral=True)
+        elif not codigo:
+            await interaction.response.send_message("Não há código de modpack configurado.", ephemeral=True)
+        else:
+            await interaction.response.send_message(
+                "Remover o código do guia? Ele ficará como não configurado.",
+                view=ConfirmarRemocaoCodigo(interaction.user.id, codigo), ephemeral=True,
+            )
 
 
 class Modpack(commands.Cog):
@@ -90,12 +141,14 @@ class Modpack(commands.Cog):
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def painel(self, ctx):
+        canal_avisos = ctx.guild.get_channel(config.CANAL_AVISOS_INTERNOS_ID)
+        referencia_avisos = canal_avisos.mention if canal_avisos else "canal de avisos internos"
         embed = discord.Embed(
             title="🛠️ Gerenciamento do modpack",
             description=(
                 "Quando houver uma nova versão do modpack, clique em **Atualizar código** e informe o novo código do perfil do Gale.\n\n"
-                "O bot atualizará o último guia publicado e enviará um aviso com **@everyone** no canal de avisos internos.\n\n"
-                "Antes de usar o painel, publique o guia com `!guia_modpack`. Apenas administradores podem atualizar o código."
+                f"O bot atualizará o último guia publicado e enviará um aviso com **@everyone** em {referencia_avisos}.\n\n"
+                "Para limpar o código do guia, use **Remover código** e confirme a operação."
             ),
             color=config.COR_GLITNIR,
         )
@@ -146,6 +199,33 @@ class Modpack(commands.Cog):
                 await interaction.followup.send("O guia e o código foram atualizados, mas não consegui enviar o aviso. Verifique as permissões do canal de avisos.", ephemeral=True)
                 return
             await interaction.followup.send("Código atualizado no guia e aviso publicado.", ephemeral=True)
+
+    async def remover_codigo(self, interaction, codigo_esperado):
+        async with self.lock:
+            dados = self.dados.get(str(interaction.guild_id), {})
+            if dados.get("codigo") != codigo_esperado:
+                await interaction.followup.send("O código foi alterado desde a confirmação. Abra uma nova solicitação.", ephemeral=True)
+                return
+            canal = interaction.guild.get_channel(dados.get("canal"))
+            if not canal or not dados.get("mensagem"):
+                await interaction.followup.send("Guia não encontrado. Publique-o novamente com `!guia_modpack`.", ephemeral=True)
+                return
+            try:
+                mensagem = await canal.fetch_message(dados["mensagem"])
+                await mensagem.edit(embed=embed_guia(""), allowed_mentions=discord.AllowedMentions.none())
+            except discord.HTTPException as erro:
+                print(f"[Modpack] Falha ao limpar guia: {erro}")
+                await interaction.followup.send("Não foi possível atualizar o guia. Verifique o canal e as permissões do bot.", ephemeral=True)
+                return
+            dados["codigo"] = ""
+            try:
+                storage.save_json(DATA_FILE, self.dados)
+            except OSError as erro:
+                dados["codigo"] = codigo_esperado
+                print(f"[Modpack] Falha ao salvar remoção: {erro}")
+                await interaction.followup.send("O guia foi alterado, mas a remoção não foi salva. Avise a equipe.", ephemeral=True)
+                return
+            await interaction.followup.send("Código removido e guia atualizado.", ephemeral=True)
 
 
 async def setup(bot):
