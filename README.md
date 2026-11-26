@@ -62,6 +62,10 @@ E adiciona o caminho `"cogs.meu_arquivo"` na lista `EXTENSIONS` do `main.py`.
 
 ## Importante
 
+- Configure `CATEGORIA_GUILDAS_ID` com o ID da categoria dos canais de voz de guilda. O bot precisa de permissões para gerenciar cargos e canais, e seu cargo deve ficar acima dos cargos de guilda.
+- Os líderes, vice-líderes e canais são registrados em `data/guildas.json`. Preserve esse arquivo em armazenamento persistente e em backups nas atualizações e reinstalações da hospedagem; perdê-lo impede o bot de reconhecer as guildas existentes.
+- Um administrador pode usar `!guilda_lider @membro` no chat do canal de voz para nomear um membro como líder, inclusive se o líder anterior sair sem vice.
+
 - **Nunca** comite o `.env` no git (já está no `.gitignore`).
 - Se o token vazar em algum momento (chat, print, etc.), resete-o no Developer Portal.
 - Para a whitelist de dois servidores, configure `PTERODACTYL_SERVER_ID` (Server 1, mantido por compatibilidade) e `PTERODACTYL_SERVER_2_ID` (Server 2). Ambos usam a mesma URL, chave de API e caminho definidos nas demais variáveis `PTERODACTYL_*`.

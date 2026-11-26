@@ -1300,7 +1300,6 @@ class GuildaDropdown(ui.Select):
     def __init__(self):
         options = [
             discord.SelectOption(label="Chat de Guilda", emoji=EMOJIS["Chat de Guilda"]),
-            discord.SelectOption(label="Território de Guilda", emoji=EMOJIS["Território de Guilda"]),
         ]
         super().__init__(
             placeholder="Escolha uma opção...",
@@ -1311,15 +1310,8 @@ class GuildaDropdown(ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        categoria = self.values[0]
-
-        # Reseta o menu, senão ele fica "preso" mostrando a última escolha
-        try:
-            await interaction.message.edit(view=GuildaPanelView())
-        except Exception as e:
-            print(f"Erro ao resetar o menu de guilda: {e}")
-
-        await interaction.response.send_modal(CategoriaModal(categoria))
+        from cogs.guildas import PainelGuildas
+        await interaction.response.edit_message(content="🛡️ **Guildas de Glitnir**\nCrie um canal de voz para sua guilda no Discord.", embed=None, view=PainelGuildas())
 
 
 class GuildaPanelView(ui.View):
@@ -1433,7 +1425,8 @@ class SupportCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def guilda_painel(self, ctx: commands.Context):
         """Publica o painel dedicado de Chat de Guilda / Território de Guilda."""
-        await ctx.send(embed=embed_painel_guilda(), view=GuildaPanelView())
+        from cogs.guildas import PainelGuildas
+        await ctx.send("🛡️ **Guildas de Glitnir**\nCrie um canal de voz para sua guilda no Discord.", view=PainelGuildas())
         try:
             await ctx.message.delete()
         except Exception as e:
