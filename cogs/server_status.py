@@ -19,7 +19,7 @@ WORLD_BIOME = os.getenv("WORLD_BIOME", "Prado")
 
 SERVIDORES = (
     {"nome": "Glitnir Awakening - Server 1", "ip": "162.43.190.115", "porta": 2501, "servidor": "server_1"},
-    {"nome": "Glitnir Awakening - Server 2", "ip": "162.43.190.115", "porta": 2051, "servidor": "server_2"},
+    {"nome": "Glitnir Awakening - Server 2", "ip": "162.43.190.115", "porta": 2551, "servidor": "server_2"},
 )
 
 
