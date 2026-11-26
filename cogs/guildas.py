@@ -3,6 +3,7 @@ import re
 from types import SimpleNamespace
 
 import discord
+import emoji
 from discord.ext import commands
 
 import config
@@ -20,6 +21,9 @@ class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
         icone = str(self.icone).strip()
         if not nome or not icone or re.search(r"[\r\n]", nome + icone):
             await interaction.response.send_message("Informe um nome e um ícone válidos.", ephemeral=True)
+            return
+        if not emoji.is_emoji(icone):
+            await interaction.response.send_message("Informe exatamente um emoji Unicode como ícone, por exemplo ⚔️.", ephemeral=True)
             return
         nome_final = f"{icone} {nome}"
         if len(nome_final) > 100:
