@@ -62,6 +62,8 @@ E adiciona o caminho `"cogs.meu_arquivo"` na lista `EXTENSIONS` do `main.py`.
 
 ## Importante
 
+- O enviador `!painel_mensagens` usa apenas os canais definidos em `CANAL_AVISOS_INTERNOS_ID`, `CHAT_GERAL_ID`, `CANAL_ANUNCIOS_ID`, `CANAL_ANUNCIOS_SJAR_ID` e `CANAL_CHAT_ADMIN_ID`.
+
 - Para o guia do modpack, configure `CANAL_GUIA_MODPACK_ID` e `CANAL_AVISOS_INTERNOS_ID` no ambiente. Use `!guia_modpack` para publicar no canal configurado e `!painel_modpack` em um canal de administração. Preserve `data/modpack.json` nas atualizações para manter o código e a referência à mensagem. Ao mudar o canal do guia, publique-o novamente.
 
 - Configure `CATEGORIA_GUILDAS_ID` com o ID da categoria dos canais de voz de guilda. O bot precisa de permissões para gerenciar cargos e canais, e seu cargo deve ficar acima dos cargos de guilda.

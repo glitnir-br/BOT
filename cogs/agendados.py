@@ -9,6 +9,18 @@ def administrador(interaction):
     return bool(interaction.guild and interaction.user.guild_permissions.administrator)
 
 
+def canais_permitidos(guild):
+    configurados = (
+        ("Avisos internos", config.CANAL_AVISOS_INTERNOS_ID),
+        ("Chat geral", config.CHAT_GERAL_ID),
+        ("Anúncios", config.CANAL_ANUNCIOS_ID),
+        ("Anúncios do Sjar", config.CANAL_ANUNCIOS_SJAR_ID),
+        ("Chat Admin", config.CANAL_CHAT_ADMIN_ID),
+    )
+    return [(nome, canal) for nome, canal_id in configurados
+            if canal_id and (canal := guild.get_channel(canal_id)) and hasattr(canal, "send")]
+
+
 class MensagemModal(ui.Modal, title="Enviar mensagem"):
     texto = ui.TextInput(label="Mensagem", style=discord.TextStyle.paragraph, max_length=4000)
 
@@ -27,7 +39,7 @@ class MensagemModal(ui.Modal, title="Enviar mensagem"):
         if not texto:
             await interaction.response.send_message("A mensagem não pode ficar vazia.", ephemeral=True)
             return
-        canal = interaction.guild.get_channel(self.canal_id)
+        canal = next((canal for _, canal in canais_permitidos(interaction.guild) if canal.id == self.canal_id), None)
         if not canal or not hasattr(canal, "send"):
             await interaction.response.send_message("O canal escolhido não está disponível.", ephemeral=True)
             return
@@ -59,22 +71,28 @@ class MensagemModal(ui.Modal, title="Enviar mensagem"):
         await interaction.followup.send(f"Mensagem enviada em {canal.mention}.", ephemeral=True)
 
 
-class EscolherCanal(ui.ChannelSelect):
-    def __init__(self):
-        super().__init__(placeholder="Escolha o canal de publicação", channel_types=[discord.ChannelType.text, discord.ChannelType.news, discord.ChannelType.voice, discord.ChannelType.stage_voice])
+class EscolherCanal(ui.Select):
+    def __init__(self, canais):
+        super().__init__(placeholder="Escolha o canal de publicação", options=[
+            discord.SelectOption(label=nome, value=str(canal.id)) for nome, canal in canais
+        ])
 
     async def callback(self, interaction):
         if not administrador(interaction) or interaction.user.id != self.view.autor_id:
             await interaction.response.send_message("Somente o administrador que iniciou o envio pode continuar.", ephemeral=True)
             return
-        await interaction.response.send_modal(MensagemModal(self.values[0].id, self.view.autor_id))
+        canal_id = int(self.values[0])
+        if not any(canal.id == canal_id for _, canal in canais_permitidos(interaction.guild)):
+            await interaction.response.send_message("Este canal não está mais disponível para envio.", ephemeral=True)
+            return
+        await interaction.response.send_modal(MensagemModal(canal_id, self.view.autor_id))
 
 
 class EscolhaCanalView(ui.View):
-    def __init__(self, autor_id):
+    def __init__(self, autor_id, canais):
         super().__init__(timeout=120)
         self.autor_id = autor_id
-        self.add_item(EscolherCanal())
+        self.add_item(EscolherCanal(canais))
 
 
 class PainelMensagens(ui.View):
@@ -86,7 +104,11 @@ class PainelMensagens(ui.View):
         if not administrador(interaction):
             await interaction.response.send_message("Apenas administradores podem enviar mensagens.", ephemeral=True)
             return
-        await interaction.response.send_message("Escolha o canal para publicar a mensagem:", view=EscolhaCanalView(interaction.user.id), ephemeral=True)
+        canais = canais_permitidos(interaction.guild)
+        if not canais:
+            await interaction.response.send_message("Nenhum canal de envio está configurado ou acessível.", ephemeral=True)
+            return
+        await interaction.response.send_message("Escolha o canal para publicar a mensagem:", view=EscolhaCanalView(interaction.user.id, canais), ephemeral=True)
 
 
 class PainelAntigo(ui.View):

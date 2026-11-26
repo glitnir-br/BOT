@@ -47,6 +47,9 @@ LOG_FECHADOS_ID = _int_env("LOG_FECHADOS_ID") or CANAL_LOG_ID
 CANAL_AVISOS_ID = _int_env("CANAL_AVISOS_ID") or CANAL_LOG_ID  # avisos de segurança, como tentativa de whitelist banida
 CANAL_BOT_MANAGER_ID = _int_env("CANAL_BOT_MANAGER_ID")  # painel de criação de agendamentos
 CANAL_AVISOS_INTERNOS_ID = _int_env("CANAL_AVISOS_INTERNOS_ID")  # atualizações do modpack
+CANAL_ANUNCIOS_ID = _int_env("CANAL_ANUNCIOS_ID")
+CANAL_ANUNCIOS_SJAR_ID = _int_env("CANAL_ANUNCIOS_SJAR_ID")
+CANAL_CHAT_ADMIN_ID = _int_env("CANAL_CHAT_ADMIN_ID")
 CANAL_GUIA_MODPACK_ID = _int_env("CANAL_GUIA_MODPACK_ID")
 
 # --- Integração Base44 (sincroniza a whitelist aprovada com a tabela de players) ---
