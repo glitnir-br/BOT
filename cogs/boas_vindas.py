@@ -14,6 +14,7 @@ COR_GLITNIR = discord.Color.from_str("#17e0d6")
 
 def montar_embed_boas_vindas(member: discord.Member):
     total_membros = member.guild.member_count
+    comece_aqui = f"<#{config.CANAL_COMECE_AQUI_ID}>" if config.CANAL_COMECE_AQUI_ID else "**comece-aqui**"
 
     embed = discord.Embed(
         title="⚔️ Mais um Viking chegou em Glitnir!",
@@ -21,6 +22,7 @@ def montar_embed_boas_vindas(member: discord.Member):
             "Salve! Seja muito bem-vindo(a) às terras de **Glitnir**.\n\n"
             "Aqui você vai encontrar aventuras, boas histórias e uma comunidade "
             "pronta pra te ajudar a sobreviver (e a rir das suas mortes pra troll 😄).\n\n"
+            f"🧭 Comece por {comece_aqui} para receber seu cargo.\n\n"
             "📜 Dá uma olhadinha nas regras: <#1389580571214348328>\n"
             "📋 E não esquece de fazer sua whitelist: <#1530078865555325068>\n\n"
             "Qualquer dúvida, é só abrir um ticket de suporte!"
