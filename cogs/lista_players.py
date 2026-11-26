@@ -52,7 +52,8 @@ class ListaPlayers(commands.Cog):
             if atual or not grupos:
                 grupos.append(atual or "Nenhum jogador registrado.")
             for indice, texto in enumerate(grupos, 1):
-                titulo = f"📋 Jogadores — {nome}"
+                quantidade = len(linhas)
+                titulo = f"📋 Jogadores — {nome} ({quantidade} {'jogador' if quantidade == 1 else 'jogadores'})"
                 if len(grupos) > 1:
                     titulo += f" ({indice}/{len(grupos)})"
                 embeds.append(discord.Embed(title=titulo, description=texto, color=config.COR_GLITNIR))
