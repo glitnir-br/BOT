@@ -130,12 +130,16 @@ class Modpack(commands.Cog):
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def guia(self, ctx):
+        canal = ctx.guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
+        if not canal or not hasattr(canal, "send"):
+            await ctx.send("Canal do guia não configurado ou inacessível. Verifique CANAL_GUIA_MODPACK_ID.")
+            return
         async with self.lock:
             dados = self.dados.setdefault(str(ctx.guild.id), {})
-            mensagem = await ctx.send(embed=embed_guia(dados.get("codigo", "")), allowed_mentions=discord.AllowedMentions.none())
-            dados.update({"canal": ctx.channel.id, "mensagem": mensagem.id})
+            mensagem = await canal.send(embed=embed_guia(dados.get("codigo", "")), allowed_mentions=discord.AllowedMentions.none())
+            dados.update({"canal": canal.id, "mensagem": mensagem.id})
             storage.save_json(DATA_FILE, self.dados)
-        await ctx.send("Guia publicado. Este será o guia atualizado pelo painel.", delete_after=15)
+        await ctx.send(f"Guia publicado em {canal.mention}. Este será o guia atualizado pelo painel.", delete_after=15)
 
     @commands.command(name="painel_modpack")
     @commands.guild_only()
@@ -143,11 +147,13 @@ class Modpack(commands.Cog):
     async def painel(self, ctx):
         canal_avisos = ctx.guild.get_channel(config.CANAL_AVISOS_INTERNOS_ID)
         referencia_avisos = canal_avisos.mention if canal_avisos else "canal de avisos internos"
+        canal_guia = ctx.guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
+        referencia_guia = canal_guia.mention if canal_guia else "canal do guia de instalação"
         embed = discord.Embed(
             title="🛠️ Gerenciamento do modpack",
             description=(
                 "Quando houver uma nova versão do modpack, clique em **Atualizar código** e informe o novo código do perfil do Gale.\n\n"
-                f"O bot atualizará o último guia publicado e enviará um aviso com **@everyone** em {referencia_avisos}.\n\n"
+                f"O bot atualizará o guia em {referencia_guia} e enviará um aviso com **@everyone** em {referencia_avisos}.\n\n"
                 "Para limpar o código do guia, use **Remover código** e confirme a operação."
             ),
             color=config.COR_GLITNIR,
@@ -161,9 +167,9 @@ class Modpack(commands.Cog):
     async def atualizar(self, interaction, codigo):
         async with self.lock:
             dados = self.dados.get(str(interaction.guild_id), {})
-            canal = interaction.guild.get_channel(dados.get("canal"))
+            canal = interaction.guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
             avisos = interaction.guild.get_channel(config.CANAL_AVISOS_INTERNOS_ID)
-            if not canal or not dados.get("mensagem"):
+            if not canal or dados.get("canal") != config.CANAL_GUIA_MODPACK_ID or not dados.get("mensagem"):
                 await interaction.followup.send("Publique primeiro o guia usando `!guia_modpack`.", ephemeral=True)
                 return
             if not avisos or not hasattr(avisos, "send"):
@@ -206,8 +212,8 @@ class Modpack(commands.Cog):
             if dados.get("codigo") != codigo_esperado:
                 await interaction.followup.send("O código foi alterado desde a confirmação. Abra uma nova solicitação.", ephemeral=True)
                 return
-            canal = interaction.guild.get_channel(dados.get("canal"))
-            if not canal or not dados.get("mensagem"):
+            canal = interaction.guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
+            if not canal or dados.get("canal") != config.CANAL_GUIA_MODPACK_ID or not dados.get("mensagem"):
                 await interaction.followup.send("Guia não encontrado. Publique-o novamente com `!guia_modpack`.", ephemeral=True)
                 return
             try:

@@ -62,7 +62,7 @@ E adiciona o caminho `"cogs.meu_arquivo"` na lista `EXTENSIONS` do `main.py`.
 
 ## Importante
 
-- Para o guia do modpack, configure `CANAL_AVISOS_INTERNOS_ID` no ambiente, publique `!guia_modpack` no canal do guia e `!painel_modpack` em um canal de administração. O painel atualiza o último guia publicado e anuncia o novo código. Preserve `data/modpack.json` nas atualizações para manter o código e a referência à mensagem.
+- Para o guia do modpack, configure `CANAL_GUIA_MODPACK_ID` e `CANAL_AVISOS_INTERNOS_ID` no ambiente. Use `!guia_modpack` para publicar no canal configurado e `!painel_modpack` em um canal de administração. Preserve `data/modpack.json` nas atualizações para manter o código e a referência à mensagem. Ao mudar o canal do guia, publique-o novamente.
 
 - Configure `CATEGORIA_GUILDAS_ID` com o ID da categoria dos canais de voz de guilda. O bot precisa de permissões para gerenciar cargos e canais, e seu cargo deve ficar acima dos cargos de guilda.
 - Os líderes, vice-líderes e canais são registrados em `data/guildas.json`. Preserve esse arquivo em armazenamento persistente e em backups nas atualizações e reinstalações da hospedagem; perdê-lo impede o bot de reconhecer as guildas existentes.
