@@ -18,7 +18,7 @@ def montar_embed_boas_vindas(member: discord.Member):
     embed = discord.Embed(
         title="⚔️ Mais um Viking chegou em Glitnir!",
         description=(
-            f"Salve, {member.mention}! Seja muito bem-vindo(a) às terras de **Glitnir**.\n\n"
+            "Salve! Seja muito bem-vindo(a) às terras de **Glitnir**.\n\n"
             "Aqui você vai encontrar aventuras, boas histórias e uma comunidade "
             "pronta pra te ajudar a sobreviver (e a rir das suas mortes pra troll 😄).\n\n"
             "📜 Dá uma olhadinha nas regras: <#1389580571214348328>\n"
@@ -54,9 +54,9 @@ class BoasVindas(commands.Cog):
         embed, arquivo = montar_embed_boas_vindas(member)
         try:
             if arquivo:
-                await canal.send(embed=embed, file=arquivo)
+                await canal.send(content=member.mention, embed=embed, file=arquivo, allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False))
             else:
-                await canal.send(embed=embed)
+                await canal.send(content=member.mention, embed=embed, allowed_mentions=discord.AllowedMentions(users=[member], roles=False, everyone=False))
         except Exception as e:
             print(f"Erro ao enviar mensagem de boas-vindas: {e}")
 
@@ -71,9 +71,9 @@ class BoasVindas(commands.Cog):
 
         embed, arquivo = montar_embed_boas_vindas(ctx.author)
         if arquivo:
-            await canal.send(embed=embed, file=arquivo)
+            await canal.send(content=ctx.author.mention, embed=embed, file=arquivo, allowed_mentions=discord.AllowedMentions(users=[ctx.author], roles=False, everyone=False))
         else:
-            await canal.send(embed=embed)
+            await canal.send(content=ctx.author.mention, embed=embed, allowed_mentions=discord.AllowedMentions(users=[ctx.author], roles=False, everyone=False))
 
         try:
             await ctx.message.delete()
