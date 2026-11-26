@@ -47,7 +47,15 @@ class Apresentacao(commands.Cog):
             await ctx.send("A mensagem registrada não pertence ao bot. Verifique a configuração.")
             return
         try:
-            embed = discord.Embed(title="🩸 Comece sua jornada", description="Reaja com 🩸 nesta mensagem para receber seu cargo e começar sua jornada em Glitnir!", color=config.COR_GLITNIR)
+            embed = discord.Embed(
+                title="🩸 Sua jornada em Glitnir começa aqui!",
+                description=(
+                    "Os portões do reino estão abertos, viking! ⚔️\n\n"
+                    "Reaja com **🩸** nesta mensagem para receber seu cargo e dar o primeiro passo na comunidade.\n\n"
+                    "Depois, conheça as regras e faça sua whitelist para se preparar para a aventura. 🍻"
+                ),
+                color=config.COR_GLITNIR,
+            )
             if mensagem:
                 await mensagem.edit(embed=embed, allowed_mentions=discord.AllowedMentions.none())
             else:
