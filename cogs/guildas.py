@@ -36,6 +36,54 @@ class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
         )
 
 
+class EditarGuilda(discord.ui.Modal, title="Editar nome e emoji da guilda"):
+    nome = discord.ui.TextInput(label="Novo nome da guilda", max_length=80)
+    icone = discord.ui.TextInput(label="Novo emoji", placeholder="Exemplo: ⚔️", max_length=20)
+
+    async def on_submit(self, interaction):
+        cog = interaction.client.get_cog("Guildas")
+        if not cog or not cog.eh_lider(interaction):
+            await interaction.response.send_message("Somente o líder pode editar a guilda.", ephemeral=True)
+            return
+        nome = str(self.nome).strip()
+        icone = str(self.icone).strip()
+        if not nome or re.search(r"[\r\n]", nome) or not emoji.is_emoji(icone):
+            await interaction.response.send_message("Informe um nome válido e exatamente um emoji Unicode.", ephemeral=True)
+            return
+        nome_final = f"{icone} {nome}"
+        if len(nome_final) > 100:
+            await interaction.response.send_message("O nome completo, incluindo o emoji, deve ter no máximo 100 caracteres.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True)
+        async with cog.lock:
+            if not cog.eh_lider(interaction):
+                await interaction.followup.send("Você não é mais o líder desta guilda.", ephemeral=True)
+                return
+            dados = cog.dados.get(str(interaction.channel_id))
+            cargo = interaction.guild.get_role(dados["cargo"]) if dados else None
+            canal = interaction.guild.get_channel(interaction.channel_id)
+            if not cargo or not canal:
+                await interaction.followup.send("Canal ou cargo da guilda não encontrado. Avise a equipe.", ephemeral=True)
+                return
+            nome_anterior = cargo.name
+            try:
+                await cargo.edit(name=nome_final, reason=f"Guilda editada pelo líder {interaction.user.id}")
+                try:
+                    await canal.edit(name=nome_final, reason=f"Guilda editada pelo líder {interaction.user.id}")
+                except discord.HTTPException:
+                    try:
+                        await cargo.edit(name=nome_anterior, reason="Reverter edição incompleta da guilda")
+                    except discord.HTTPException:
+                        await interaction.followup.send("Não foi possível atualizar o canal nem reverter o cargo. Avise a equipe para corrigir os nomes.", ephemeral=True)
+                        return
+                    raise
+            except discord.HTTPException as erro:
+                print(f"[Guildas] Erro ao editar guilda: {erro}")
+                await interaction.followup.send("Não foi possível editar a guilda. Verifique as permissões do bot.", ephemeral=True)
+                return
+        await interaction.followup.send("Nome e emoji da guilda atualizados no cargo e no canal.", ephemeral=True)
+
+
 class ConfirmarCriacao(discord.ui.View):
     def __init__(self, autor_id, nome):
         super().__init__(timeout=120)
@@ -139,8 +187,8 @@ class SelecionarRemocao(discord.ui.Select):
 
     async def callback(self, interaction):
         cog = interaction.client.get_cog("Guildas")
-        if not cog or not cog.eh_lider(interaction):
-            await interaction.response.send_message("Somente o líder desta guilda pode remover membros.", ephemeral=True)
+        if not cog or not cog.pode_gerenciar_membros(interaction):
+            await interaction.response.send_message("Somente o líder ou vice-líder pode remover membros.", ephemeral=True)
             return
         membro = interaction.guild.get_member(int(self.values[0]))
         if not membro:
@@ -165,14 +213,14 @@ class RemocaoView(discord.ui.View):
 
     async def interaction_check(self, interaction):
         if interaction.user.id != self.autor_id:
-            await interaction.response.send_message("Esta seleção pertence ao líder que a abriu.", ephemeral=True)
+            await interaction.response.send_message("Esta seleção pertence a quem a abriu.", ephemeral=True)
             return False
         return True
 
     async def trocar_pagina(self, interaction, pagina):
         cog = interaction.client.get_cog("Guildas")
-        if not cog or not cog.eh_lider(interaction):
-            await interaction.response.send_message("Somente o líder desta guilda pode usar este controle.", ephemeral=True)
+        if not cog or not cog.pode_gerenciar_membros(interaction):
+            await interaction.response.send_message("Somente o líder ou vice-líder pode remover membros.", ephemeral=True)
             return
         self.stop()
         await interaction.response.edit_message(content=f"Selecione um membro da guilda (página {pagina + 1}):", view=RemocaoView(self.membros, self.autor_id, pagina))
@@ -186,35 +234,33 @@ class RemocaoView(discord.ui.View):
         await self.trocar_pagina(interaction, self.pagina + 1)
 
 
-class ConfirmarExclusao(discord.ui.View):
-    def __init__(self, autor_id, canal_id):
-        super().__init__(timeout=60)
+class ConfirmarExclusao(discord.ui.Modal, title="Confirmar exclusão da guilda"):
+    nome = discord.ui.TextInput(label="Nome com emoji (exclui canal e cargo)", max_length=100)
+
+    def __init__(self, autor_id, canal_id, nome_guilda):
+        super().__init__(timeout=120)
         self.autor_id = autor_id
         self.canal_id = canal_id
         self.usado = False
+        self.nome.placeholder = nome_guilda[:100]
 
-    async def interaction_check(self, interaction):
+    async def on_submit(self, interaction):
         cog = interaction.client.get_cog("Guildas")
-        if interaction.user.id != self.autor_id or not cog or not cog.eh_lider(interaction):
+        if interaction.user.id != self.autor_id or interaction.channel_id != self.canal_id or not cog or not cog.eh_lider(interaction):
             await interaction.response.send_message("Somente o líder que iniciou a exclusão pode confirmá-la.", ephemeral=True)
-            return False
-        return True
-
-    @discord.ui.button(label="Confirmar exclusão", style=discord.ButtonStyle.danger)
-    async def confirmar(self, interaction, button):
+            return
         if self.usado:
             await interaction.response.send_message("Esta solicitação já foi processada.", ephemeral=True)
             return
+        dados = cog.dados.get(str(self.canal_id))
+        cargo = interaction.guild.get_role(dados["cargo"]) if dados else None
+        if not cargo or str(self.nome) != cargo.name:
+            await interaction.response.send_message("O nome informado não corresponde ao nome completo da guilda. Nenhuma alteração foi feita.", ephemeral=True)
+            return
         self.usado = True
         self.stop()
-        await interaction.response.edit_message(content="Excluindo a guilda...", view=None)
-        cog = interaction.client.get_cog("Guildas")
+        await interaction.response.send_message("Nome confirmado. Excluindo o canal e o cargo da guilda...", ephemeral=True)
         await cog.excluir(interaction, self.canal_id)
-
-    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
-    async def cancelar(self, interaction, button):
-        self.stop()
-        await interaction.response.edit_message(content="Exclusão cancelada.", view=None)
 
 
 class MenuGuilda(discord.ui.Select):
@@ -224,12 +270,19 @@ class MenuGuilda(discord.ui.Select):
             discord.SelectOption(label="Remover membro", value="remover", emoji="➖"),
             discord.SelectOption(label="Selecionar vice-líder", value="vice", emoji="🛡️"),
             discord.SelectOption(label="Transferir liderança", value="transferir", emoji="👑"),
+            discord.SelectOption(label="Editar nome e emoji", value="editar", emoji="✏️"),
             discord.SelectOption(label="Apagar guilda", value="excluir", emoji="🗑️"),
         ])
 
     async def callback(self, interaction):
         if self.values[0] == "excluir":
             await self.view.excluir(interaction)
+        elif self.values[0] == "editar":
+            cog = interaction.client.get_cog("Guildas")
+            if not cog or not cog.eh_lider(interaction):
+                await interaction.response.send_message("Somente o líder pode editar a guilda.", ephemeral=True)
+                return
+            await interaction.response.send_modal(EditarGuilda())
         else:
             await self.view.escolher(interaction, self.values[0])
 
@@ -241,8 +294,9 @@ class ControlesGuilda(discord.ui.View):
 
     async def escolher(self, interaction, acao):
         cog = interaction.client.get_cog("Guildas")
-        if not cog or not cog.eh_lider(interaction):
-            await interaction.response.send_message("Somente o líder desta guilda pode usar este controle.", ephemeral=True)
+        permitido = cog and (cog.pode_gerenciar_membros(interaction) if acao in ("adicionar", "remover") else cog.eh_lider(interaction))
+        if not permitido:
+            await interaction.response.send_message("Você não tem permissão para usar este controle.", ephemeral=True)
             return
         if acao == "remover":
             await interaction.response.defer(ephemeral=True)
@@ -270,10 +324,12 @@ class ControlesGuilda(discord.ui.View):
         if not cog or not cog.eh_lider(interaction):
             await interaction.response.send_message("Somente o líder desta guilda pode apagá-la.", ephemeral=True)
             return
-        await interaction.response.send_message(
-            "Apagar a guilda? O canal de voz, seu histórico e o cargo serão excluídos. Confirme em até 60 segundos.",
-            view=ConfirmarExclusao(interaction.user.id, interaction.channel_id), ephemeral=True,
-        )
+        dados = cog.dados[str(interaction.channel_id)]
+        cargo = interaction.guild.get_role(dados["cargo"])
+        if not cargo:
+            await interaction.response.send_message("Cargo da guilda não encontrado. Avise a equipe.", ephemeral=True)
+            return
+        await interaction.response.send_modal(ConfirmarExclusao(interaction.user.id, interaction.channel_id, cargo.name))
 
 
 class Guildas(commands.Cog):
@@ -295,7 +351,7 @@ class Guildas(commands.Cog):
                 descricao += f"\n... e mais {len(linhas) - indice} membro(s)."
                 break
             descricao += linha + "\n"
-        descricao += "\nSomente o líder pode gerenciar os membros e selecionar um vice-líder."
+        descricao += "\nLíder e vice-líder podem adicionar ou remover membros. As demais ações são exclusivas do líder."
         return discord.Embed(title="🛡️ Gestão da guilda", description=descricao, color=discord.Color.blurple())
 
     async def atualizar_painel(self, canal, dados):
@@ -354,6 +410,10 @@ class Guildas(commands.Cog):
     def eh_lider(self, interaction):
         registro = self.dados.get(str(interaction.channel_id))
         return bool(registro and registro["guild_id"] == interaction.guild_id and registro.get("lider") == interaction.user.id)
+
+    def pode_gerenciar_membros(self, interaction):
+        registro = self.dados.get(str(interaction.channel_id))
+        return bool(registro and registro["guild_id"] == interaction.guild_id and interaction.user.id in (registro.get("lider"), registro.get("vice")))
 
     def lider_de_outra(self, guild_id, usuario_id, exceto=None):
         return any(canal_id != str(exceto) and dados["guild_id"] == guild_id and dados.get("lider") == usuario_id
@@ -423,8 +483,9 @@ class Guildas(commands.Cog):
         await interaction.followup.send(f"Guilda criada: {canal.mention}", ephemeral=True)
 
     async def alterar_membro(self, interaction, usuario, acao):
-        if not self.eh_lider(interaction):
-            await interaction.response.send_message("Somente o líder desta guilda pode usar este controle.", ephemeral=True)
+        permitido = self.pode_gerenciar_membros(interaction) if acao in ("adicionar", "remover") else self.eh_lider(interaction)
+        if not permitido:
+            await interaction.response.send_message("Você não tem permissão para usar este controle.", ephemeral=True)
             return
         dados = self.dados[str(interaction.channel_id)]
         cargo = interaction.guild.get_role(dados["cargo"])
@@ -447,10 +508,10 @@ class Guildas(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         try:
             if acao == "adicionar":
-                await membro.add_roles(cargo, reason=f"Adicionado pelo líder {interaction.user.id}")
+                await membro.add_roles(cargo, reason=f"Adicionado pela gestão da guilda: {interaction.user.id}")
                 mensagem = "Membro adicionado."
             elif acao == "remover":
-                await membro.remove_roles(cargo, reason=f"Removido pelo líder {interaction.user.id}")
+                await membro.remove_roles(cargo, reason=f"Removido pela gestão da guilda: {interaction.user.id}")
                 if dados.get("vice") == membro.id:
                     dados["vice"] = None
                     self.salvar()
