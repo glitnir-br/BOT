@@ -1,5 +1,6 @@
 from discord.ext import commands
 import discord
+from pathlib import Path
 
 import config
 
@@ -9,6 +10,29 @@ class Texto(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @commands.command(name="regras")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def regras(self, ctx: commands.Context):
+        """Publica o códice no canal em que o comando for executado."""
+        arquivo = Path(__file__).resolve().parent.parent / "regras" / "codice.md"
+        try:
+            texto = arquivo.read_text(encoding="utf-8-sig")
+            secoes = [secao.strip() for secao in texto.split("\n# ")]
+            secoes[0] = secoes[0].removeprefix("# ")
+            embeds = []
+            for secao in secoes:
+                titulo, descricao = secao.split("\n", 1)
+                if not titulo.strip() or len(titulo) > 256 or len(descricao.strip()) > 4096:
+                    raise ValueError("Seção com título ou texto fora dos limites do Discord")
+                embeds.append(discord.Embed(title=titulo, description=descricao.strip(), color=config.COR_GLITNIR))
+        except (OSError, ValueError, IndexError) as erro:
+            print(f"[Regras] Não foi possível preparar o códice: {erro}")
+            await ctx.send("Não foi possível publicar as regras. Verifique o arquivo do códice.")
+            return
+        for embed in embeds:
+            await ctx.send(embed=embed, allowed_mentions=discord.AllowedMentions.none())
 
     @commands.command(name="text")
     @commands.has_permissions(administrator=True)

@@ -1049,9 +1049,9 @@ async def embeds_regras_whitelist(bot):
         title="📝 Regras de Nome e Identidade",
         description=(
             "Os nomes têm poder. Evite nomes ofensivos, vulgares ou de mau gosto.\n\n"
-            "**O nome no jogo deve ser o mesmo utilizado no Discord.**\n"
-            "*Exemplo: Morgnar ou Morgnar / Victor Padilha*\n\n"
-            "**O nome no jogo não pode ter espaços, números ou caracteres especiais.**\n\n"
+            "**O nome no jogo e o apelido no Discord devem ser exatamente iguais.**\n"
+            "*Exemplo: Morgnar*\n\n"
+            "**Use apenas letras sem acento, sem espaços, números ou caracteres especiais.**\n\n"
             "Nomes considerados inapropriados podem resultar em recusa de acesso, "
             "solicitação de alteração obrigatória ou banimento, sem aviso prévio."
         ),
