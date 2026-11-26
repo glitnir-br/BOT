@@ -90,7 +90,15 @@ class Modpack(commands.Cog):
     @commands.guild_only()
     @commands.has_permissions(administrator=True)
     async def painel(self, ctx):
-        await ctx.send("🛠️ **Gerenciamento do modpack**\nAdministradores podem atualizar o código do guia e enviar um aviso.", view=PainelModpack())
+        await ctx.send(
+            "🛠️ **Gerenciamento do modpack**\n\n"
+            "Quando houver uma nova versão do modpack, clique em **Atualizar código** e informe o novo código do perfil do Gale.\n\n"
+            "O bot atualizará o código no último guia publicado e enviará automaticamente um aviso com **@everyone** no canal de avisos internos.\n\n"
+            "Antes de usar o painel, publique o guia com `!guia_modpack` e configure `CANAL_AVISOS_INTERNOS_ID` no ambiente. "
+            "Apenas administradores podem atualizar o código.",
+            view=PainelModpack(),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
 
     async def atualizar(self, interaction, codigo):
         async with self.lock:
