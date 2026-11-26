@@ -62,6 +62,8 @@ E adiciona o caminho `"cogs.meu_arquivo"` na lista `EXTENSIONS` do `main.py`.
 
 ## Importante
 
+- O cadastro de jogadores aprovados fica em `data/players_whitelist.sqlite3`. Preserve e faça backup desse arquivo nas atualizações e reinstalações. Configure `CANAL_LISTA_PLAYERS_ID` e use `!lista_players` para publicar no canal definido; se mudar o canal, execute o comando novamente. O cadastro começa a partir das aprovações registradas pelo bot; aprovações anteriores e o comando manual `!whitelist_add` não fornecem automaticamente a associação ao Discord.
+
 - O enviador `!painel_mensagens` usa apenas os canais definidos em `CANAL_AVISOS_INTERNOS_ID`, `CHAT_GERAL_ID`, `CANAL_ANUNCIOS_ID`, `CANAL_ANUNCIOS_SJAR_ID` e `CANAL_CHAT_ADMIN_ID`.
 
 - Para o guia do modpack, configure `CANAL_GUIA_MODPACK_ID` e `CANAL_AVISOS_INTERNOS_ID` no ambiente. Use `!guia_modpack` para publicar no canal configurado e `!painel_modpack` em um canal de administração. Preserve `data/modpack.json` nas atualizações para manter o código e a referência à mensagem. Ao mudar o canal do guia, publique-o novamente.

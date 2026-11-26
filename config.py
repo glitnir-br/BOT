@@ -52,13 +52,7 @@ CANAL_ANUNCIOS_ID = _int_env("CANAL_ANUNCIOS_ID")
 CANAL_ANUNCIOS_SJAR_ID = _int_env("CANAL_ANUNCIOS_SJAR_ID")
 CANAL_CHAT_ADMIN_ID = _int_env("CANAL_CHAT_ADMIN_ID")
 CANAL_GUIA_MODPACK_ID = _int_env("CANAL_GUIA_MODPACK_ID")
-
-# --- Integração Base44 (sincroniza a whitelist aprovada com a tabela de players) ---
-WHITELIST_TOKEN = os.getenv("WHITELIST_TOKEN", "")  # token secreto compartilhado com o Base44 (header x-whitelist-token)
-BASE44_WHITELIST_URL = os.getenv(
-    "BASE44_WHITELIST_URL",
-    "https://glitnir-nexus-core.base44.app/functions/aprovarWhitelist",
-)
+CANAL_LISTA_PLAYERS_ID = _int_env("CANAL_LISTA_PLAYERS_ID")
 
 # Categoria do Discord onde cada tipo de ticket cria seu canal.
 # Se um tipo não tiver variável preenchida no .env, cai no SUPPORT_CATEGORY_ID acima.

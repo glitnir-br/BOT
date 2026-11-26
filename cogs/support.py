@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import sqlite3
 
 import aiohttp
 import discord
@@ -394,43 +395,6 @@ async def obter_respostas_ticket(canal: discord.TextChannel) -> dict:
     return {}
 
 
-async def enviar_whitelist_base44(nickname: str, steamid: str) -> tuple:
-    """Envia o Nickname e a SteamID aprovados pro Base44, pra cadastrar o player na tabela de players.
-    O Base44 responde com um JSON {"ok": bool, "error": str}, então além do status HTTP a gente
-    confere o campo "ok" — pode vir HTTP 200 com "ok": false se ele recusar por dentro.
-    Retorna (sucesso: bool, mensagem_de_erro: str — vazia se sucesso)."""
-    if not config.WHITELIST_TOKEN:
-        return False, "WHITELIST_TOKEN não configurado no .env"
-
-    payload = {"nick": nickname, "steamid": steamid}
-    headers = {
-        "Content-Type": "application/json",
-        "x-whitelist-token": config.WHITELIST_TOKEN,
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                config.BASE44_WHITELIST_URL,
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=10),
-            ) as resposta:
-                texto_bruto = await resposta.text()
-                try:
-                    dados = await resposta.json(content_type=None)
-                except Exception:
-                    dados = None
-
-                if resposta.status in (200, 201) and isinstance(dados, dict) and dados.get("ok"):
-                    return True, ""
-
-                erro = dados.get("error") if isinstance(dados, dict) else None
-                return False, str(erro) if erro else f"HTTP {resposta.status}: {texto_bruto[:200]}"
-    except Exception as e:
-        return False, str(e)
-
-
 async def obter_mensagem_boas_vindas(canal: discord.TextChannel):
     """Busca a primeira mensagem do canal que tenha um embed (o embed de boas-vindas do ticket)."""
     async for msg in canal.history(limit=5, oldest_first=True):
@@ -675,11 +639,6 @@ class WhitelistTicketView(TicketControlView):
             await interaction.response.send_message("Membro não encontrado no servidor (pode ter saído).", ephemeral=True)
             return
 
-        # Dá o "ok, recebi" pro Discord logo aqui — o que vem a seguir (chamada
-        # HTTP pro Base44, com até 10s de timeout, mais as trocas de cargo/apelido)
-        # passa fácil dos 3s que ele dá pra reconhecer a interação, causando o erro
-        # "O aplicativo não respondeu a tempo". Com o defer, a resposta final vira
-        # um followup, sem esse limite.
         await interaction.response.defer()
 
         # A SteamID é gravada no Pterodactyl antes de qualquer efeito no Discord.
@@ -713,6 +672,18 @@ class WhitelistTicketView(TicketControlView):
 
         await membro.add_roles(role)
 
+        lista_cog = interaction.client.get_cog("ListaPlayers")
+        if lista_cog:
+            try:
+                lista_cog.registrar(interaction.guild.id, membro.id, steamid, nickname, servidor_chave)
+                if not await lista_cog.atualizar_registrado(interaction.guild):
+                    await interaction.followup.send("Jogador registrado. Configure o canal e use `!lista_players` para publicar a lista.", ephemeral=True)
+            except (discord.HTTPException, sqlite3.Error, OSError, ValueError) as erro:
+                print(f"[Whitelist] Falha ao registrar ou atualizar lista de jogadores: {erro}")
+                await interaction.followup.send("A whitelist foi atualizada, mas houve falha ao registrar ou atualizar a lista de jogadores. Verifique os logs.", ephemeral=True)
+        else:
+            await interaction.followup.send("A whitelist foi atualizada, mas a lista de jogadores está indisponível.", ephemeral=True)
+
         # Marca o ticket depois de a SteamID estar confirmada na whitelist escolhida.
         try:
             await interaction.channel.edit(topic=f"{topic}:aprovado:{servidor_chave}")
@@ -732,24 +703,6 @@ class WhitelistTicketView(TicketControlView):
                 )
             except Exception as e:
                 print(f"Erro ao trocar apelido na aprovação da whitelist: {e}")
-
-        if nickname and steamid:
-            base44_ok, base44_erro = await enviar_whitelist_base44(nickname, steamid)
-        else:
-            base44_ok, base44_erro = False, "Não encontrei o Nickname/SteamID no formulário deste ticket"
-
-        if base44_ok:
-            await send_log(
-                interaction.client, "Whitelist: Base44",
-                f"Enviou {nickname} ({steamid}) pro Base44 (aprovado por {interaction.user.mention})",
-                user=membro, cor=discord.Color.green()
-            )
-        else:
-            await send_log(
-                interaction.client, "Whitelist: Base44 (falhou)",
-                f"Não conseguiu enviar {membro.mention} pro Base44 — {base44_erro}",
-                user=interaction.user, cor=discord.Color.red()
-            )
 
         embed_boas_vindas = discord.Embed(
             title=f"✅ Whitelist aprovada — {nome_servidor}",

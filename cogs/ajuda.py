@@ -18,6 +18,7 @@ DESCRICOES = {
     "whitelist_test": "Valida o formato da SteamID e mostra a configuração local, sem testar a conexão: `!whitelist_test <SteamID64>`.",
     "whitelist_add": "Adiciona diretamente ao Server 1, sem consultar banimentos: `!whitelist_add <SteamID64>`.",
     "remover_cargo_whitelist": "Remove o cargo de whitelist dos membros após confirmação.",
+    "lista_players": "Publica ou atualiza as listas de jogadores no canal configurado.",
     "guia_modpack": "Publica o guia do modpack no canal configurado.",
     "painel_modpack": "Publica o painel de atualização do código do modpack.",
     "painel_mensagens": "Publica o painel de envio imediato de mensagens.",
@@ -35,7 +36,7 @@ CATEGORIAS_AJUDA = {
         "ticket_painel", "whitelist_painel", "guilda_painel", "doacao_painel",
         "vip_painel", "envio_dados_painel", "painel_mensagens", "painel_modpack", "cargo_painel", "painel_apresentacao",
     ),
-    "🛡️ Gestão": ("criar_ticket", "fechar", "guilda_lider", "remover_cargo_whitelist", "whitelist_add"),
+    "🛡️ Gestão": ("criar_ticket", "fechar", "guilda_lider", "remover_cargo_whitelist", "whitelist_add", "lista_players"),
     "📢 Publicações": ("guia_modpack", "regras", "text", "editar", "anunciar"),
 }
 
