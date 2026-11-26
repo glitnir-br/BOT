@@ -7,8 +7,24 @@ from datetime import timedelta
 import config
 
 
-async def tentar_com_limite(operacao):
+class LimpezaInterrompida(Exception):
+    pass
+
+
+async def pausa_ou_parada(evento, segundos):
+    if evento.is_set():
+        raise LimpezaInterrompida
+    try:
+        await asyncio.wait_for(evento.wait(), timeout=segundos)
+    except asyncio.TimeoutError:
+        return
+    raise LimpezaInterrompida
+
+
+async def tentar_com_limite(operacao, parar):
     for tentativa in range(6):
+        if parar.is_set():
+            raise LimpezaInterrompida
         try:
             return await operacao()
         except discord.HTTPException as erro:
@@ -20,18 +36,17 @@ async def tentar_com_limite(operacao):
                     espera = float(erro.response.headers.get("Retry-After", 0))
                 except (AttributeError, TypeError, ValueError):
                     espera = 0
-            await asyncio.sleep(max(float(espera or 0), min(30 * (2 ** tentativa), 300)))
+            await pausa_ou_parada(parar, max(float(espera or 0), min(30 * (2 ** tentativa), 300)))
 
 
-async def limpar_mensagens(canal, aviso, motivo):
-    removidas = 0
+async def limpar_mensagens(canal, aviso, motivo, parar, progresso):
     cursor = discord.Object(id=aviso.id)
     while True:
         async def buscar():
             return [mensagem async for mensagem in canal.history(limit=100, before=cursor)]
-        pagina = await tentar_com_limite(buscar)
+        pagina = await tentar_com_limite(buscar, parar)
         if not pagina:
-            return removidas
+            return
         cursor = pagina[-1]
         recentes, antigas = [], []
         limite = discord.utils.utcnow() - timedelta(days=14, minutes=-5)
@@ -39,18 +54,33 @@ async def limpar_mensagens(canal, aviso, motivo):
             if not mensagem.pinned:
                 (recentes if mensagem.created_at > limite else antigas).append(mensagem)
         if len(recentes) >= 2:
-            await tentar_com_limite(lambda: canal.delete_messages(recentes, reason=motivo))
-            removidas += len(recentes)
-            await asyncio.sleep(2)
+            await tentar_com_limite(lambda: canal.delete_messages(recentes, reason=motivo), parar)
+            progresso["removidas"] += len(recentes)
+            await pausa_ou_parada(parar, 2)
         else:
             antigas.extend(recentes)
         for mensagem in antigas:
             try:
-                await tentar_com_limite(lambda: mensagem.delete(reason=motivo))
-                removidas += 1
+                await tentar_com_limite(lambda: mensagem.delete(reason=motivo), parar)
+                progresso["removidas"] += 1
             except discord.NotFound:
                 continue
-            await asyncio.sleep(1.5)
+            await pausa_ou_parada(parar, 1.5)
+
+
+class PararLimpeza(discord.ui.View):
+    def __init__(self, parar):
+        super().__init__(timeout=None)
+        self.parar = parar
+
+    @discord.ui.button(label="Parar limpeza", style=discord.ButtonStyle.danger)
+    async def interromper(self, interaction, button):
+        if not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Somente administradores podem parar a limpeza.", ephemeral=True)
+            return
+        self.parar.set()
+        button.disabled = True
+        await interaction.response.edit_message(content="Parada solicitada. Aguardando a operação atual terminar...", view=self)
 
 
 class ConfirmarLimpeza(discord.ui.View):
@@ -58,6 +88,7 @@ class ConfirmarLimpeza(discord.ui.View):
         super().__init__(timeout=60)
         self.autor_id = autor_id
         self.processando = False
+        self.parar = asyncio.Event()
 
     async def interaction_check(self, interaction):
         if interaction.user.id != self.autor_id or not interaction.user.guild_permissions.administrator:
@@ -71,18 +102,25 @@ class ConfirmarLimpeza(discord.ui.View):
             await interaction.response.send_message("A limpeza já está em andamento.", ephemeral=True)
             return
         self.processando = True
-        await interaction.response.edit_message(content="Limpeza em andamento. Isso pode levar algum tempo.", view=None)
+        self.timeout = None
+        view_parar = PararLimpeza(self.parar)
+        await interaction.response.edit_message(content="Limpeza em andamento. Use o botão para interromper.", view=view_parar)
+        progresso = {"removidas": 0}
         try:
-            removidas = await limpar_mensagens(
+            await limpar_mensagens(
                 interaction.channel, interaction.message,
                 motivo=f"Limpeza solicitada por {interaction.user} ({interaction.user.id})",
+                parar=self.parar, progresso=progresso,
             )
+        except LimpezaInterrompida:
+            await interaction.message.edit(content=f"Limpeza interrompida: {progresso['removidas']} mensagem(ns) apagada(s).", view=None)
         except discord.HTTPException as erro:
             print(f"[Limpeza] Falha no canal {interaction.channel_id}: {erro}")
             await interaction.message.edit(content="A limpeza foi interrompida. Algumas mensagens podem já ter sido apagadas.", view=None)
         else:
-            await interaction.message.edit(content=f"Limpeza concluída: {removidas} mensagem(ns) apagada(s).", view=None)
+            await interaction.message.edit(content=f"Limpeza concluída: {progresso['removidas']} mensagem(ns) apagada(s).", view=None)
         finally:
+            view_parar.stop()
             self.stop()
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
