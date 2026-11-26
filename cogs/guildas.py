@@ -348,12 +348,13 @@ class Guildas(commands.Cog):
         storage.save_json(DATA_FILE, self.dados)
 
     @staticmethod
-    def embed_guilda(cargo, membros):
-        linhas = [f"<@{membro_id}>" for membro_id in sorted(membros)]
+    def embed_guilda(cargo, membros, lider=None, vice=None):
+        linhas = [f"<@{membro_id}> — **{'Líder' if membro_id == lider else 'Vice-líder' if membro_id == vice else 'Membro'}**"
+                  for membro_id in sorted(membros)]
         cabecalho = f"**Guilda:** {cargo.mention}\n\n**Membros ({len(linhas)}):**\n"
         descricao = cabecalho
         for indice, linha in enumerate(linhas):
-            if len(descricao) + len(linha) + 100 > 4096:
+            if len(descricao) + len(linha) + 200 > 4096:
                 descricao += f"\n... e mais {len(linhas) - indice} membro(s)."
                 break
             descricao += linha + "\n"
@@ -380,11 +381,11 @@ class Guildas(commands.Cog):
                 ):
                     painel = mensagem
                     break
-        embed = self.embed_guilda(cargo, membros)
+        embed = self.embed_guilda(cargo, membros, dados.get("lider"), dados.get("vice"))
         if painel:
-            await painel.edit(content=None, embed=embed, view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions.none())
+            await painel.edit(content=cargo.mention, embed=embed, view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions.none())
         else:
-            painel = await canal.send(embed=embed, view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions.none())
+            painel = await canal.send(content=cargo.mention, embed=embed, view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions.none())
         dados["painel"] = painel.id
         self.salvar()
 
@@ -467,7 +468,7 @@ class Guildas(commands.Cog):
                 canal = await guild.create_voice_channel(name=nome, category=categoria, overwrites=overwrites, reason="Canal de guilda")
                 self.dados[str(canal.id)] = {"guild_id": guild.id, "cargo": cargo.id, "lider": interaction.user.id, "vice": None}
                 self.salvar()
-                painel = await canal.send(embed=self.embed_guilda(cargo, [interaction.user.id]), view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions.none())
+                painel = await canal.send(content=f"{cargo.mention} {interaction.user.mention}", embed=self.embed_guilda(cargo, [interaction.user.id], interaction.user.id), view=ControlesGuilda(), allowed_mentions=discord.AllowedMentions(users=True, roles=True, everyone=False))
                 self.dados[str(canal.id)]["painel"] = painel.id
                 self.salvar()
             except (discord.HTTPException, OSError) as erro:
@@ -536,7 +537,7 @@ class Guildas(commands.Cog):
                         dados["vice"] = None
                     self.salvar()
                 mensagem = f"Liderança transferida para {membro.display_name}."
-            if acao in ("adicionar", "remover"):
+            if acao in ("adicionar", "remover", "vice", "transferir"):
                 try:
                     await self.atualizar_painel(interaction.channel, dados)
                 except (discord.HTTPException, OSError) as erro:
@@ -602,6 +603,10 @@ class Guildas(commands.Cog):
         if dados.get("vice") == membro.id:
             dados["vice"] = None
         self.salvar()
+        try:
+            await self.atualizar_painel(ctx.channel, dados)
+        except (discord.HTTPException, OSError) as erro:
+            print(f"[Guildas] Erro ao atualizar painel: {erro}")
         await ctx.send(f"{membro.mention} agora é o líder da guilda.")
 
 
