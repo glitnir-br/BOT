@@ -26,7 +26,7 @@ class ConfirmarLimpeza(discord.ui.View):
         await interaction.response.edit_message(content="Limpeza em andamento. Isso pode levar algum tempo.", view=None)
         try:
             removidas = await interaction.channel.purge(
-                limit=None, check=lambda mensagem: mensagem.id != interaction.message.id,
+                limit=None, check=lambda mensagem: mensagem.id != interaction.message.id and not mensagem.pinned,
                 reason=f"Limpeza solicitada por {interaction.user} ({interaction.user.id})",
             )
         except discord.HTTPException as erro:
@@ -67,8 +67,8 @@ class Texto(commands.Cog):
             return
         view = ConfirmarLimpeza(ctx.author.id)
         aviso = await ctx.send(
-            f"⚠️ **Apagar todas as mensagens deste canal ({ctx.channel.mention})?** "
-            "Isso inclui mensagens fixadas e não pode ser desfeito. Confirme em até 60 segundos.",
+            f"⚠️ **Apagar as mensagens deste canal ({ctx.channel.mention})?** "
+            "Mensagens fixadas serão preservadas. A exclusão não pode ser desfeita. Confirme em até 60 segundos.",
             view=view,
         )
         if await view.wait():
