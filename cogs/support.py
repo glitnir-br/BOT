@@ -1310,8 +1310,8 @@ class GuildaDropdown(ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        from cogs.guildas import PainelGuildas
-        await interaction.response.edit_message(content="🛡️ **Guildas de Glitnir**\nCrie um canal de voz para sua guilda no Discord.", embed=None, view=PainelGuildas())
+        from cogs.guildas import DESCRICAO_PAINEL, PainelGuildas
+        await interaction.response.edit_message(content=DESCRICAO_PAINEL, embed=None, view=PainelGuildas())
 
 
 class GuildaPanelView(ui.View):
@@ -1425,8 +1425,8 @@ class SupportCog(commands.Cog):
     @commands.has_permissions(administrator=True)
     async def guilda_painel(self, ctx: commands.Context):
         """Publica o painel dedicado de Chat de Guilda / Território de Guilda."""
-        from cogs.guildas import PainelGuildas
-        await ctx.send("🛡️ **Guildas de Glitnir**\nCrie um canal de voz para sua guilda no Discord.", view=PainelGuildas())
+        from cogs.guildas import DESCRICAO_PAINEL, PainelGuildas
+        await ctx.send(DESCRICAO_PAINEL, view=PainelGuildas())
         try:
             await ctx.message.delete()
         except Exception as e:

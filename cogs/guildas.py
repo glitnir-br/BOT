@@ -10,6 +10,14 @@ import config
 from utils import storage
 
 DATA_FILE = "guildas.json"
+DESCRICAO_PAINEL = (
+    "🛡️ **Guildas Glitnir**\n\n"
+    "Reúna seus companheiros e crie um espaço para sua guilda!\n\n"
+    "Clique em **Criar chat de guilda** para escolher um nome e um emoji. "
+    "O bot criará um canal de voz e um cargo para seus membros.\n\n"
+    "Depois, você poderá gerenciar os membros e escolher um vice-líder pelo próprio canal.\n\n"
+    "Já participa de uma guilda? Clique em **Minhas guildas** para consultá-las."
+)
 
 
 class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
