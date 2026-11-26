@@ -5,11 +5,88 @@ from pathlib import Path
 import config
 
 
+class ConfirmarLimpeza(discord.ui.View):
+    def __init__(self, autor_id):
+        super().__init__(timeout=60)
+        self.autor_id = autor_id
+        self.processando = False
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.autor_id or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Somente o administrador que iniciou a limpeza pode confirmá-la.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Apagar mensagens", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction, button):
+        if self.processando:
+            await interaction.response.send_message("A limpeza já está em andamento.", ephemeral=True)
+            return
+        self.processando = True
+        await interaction.response.edit_message(content="Limpeza em andamento. Isso pode levar algum tempo.", view=None)
+        try:
+            removidas = await interaction.channel.purge(
+                limit=None, check=lambda mensagem: mensagem.id != interaction.message.id,
+                reason=f"Limpeza solicitada por {interaction.user} ({interaction.user.id})",
+            )
+        except discord.HTTPException as erro:
+            print(f"[Limpeza] Falha no canal {interaction.channel_id}: {erro}")
+            await interaction.followup.send("A limpeza foi interrompida. Algumas mensagens podem já ter sido apagadas.", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Limpeza concluída: {len(removidas)} mensagem(ns) apagada(s).", ephemeral=True)
+        finally:
+            try:
+                await interaction.message.delete()
+            except discord.HTTPException:
+                pass
+            self.stop()
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction, button):
+        if self.processando:
+            await interaction.response.send_message("A limpeza já está em andamento.", ephemeral=True)
+            return
+        await interaction.response.edit_message(content="Limpeza cancelada. Nenhuma mensagem foi apagada.", view=None)
+        self.stop()
+
+
 class Texto(commands.Cog):
     """Comando genérico pra postar qualquer texto como embed"""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+
+    @commands.command(name="limpar_chat")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    @commands.max_concurrency(1, per=commands.BucketType.channel)
+    async def limpar_chat(self, ctx):
+        permissoes = ctx.channel.permissions_for(ctx.guild.me)
+        if not permissoes.manage_messages or not permissoes.read_message_history:
+            await ctx.send("Preciso das permissões Gerenciar Mensagens e Ler Histórico de Mensagens neste canal.")
+            return
+        view = ConfirmarLimpeza(ctx.author.id)
+        aviso = await ctx.send(
+            f"⚠️ **Apagar todas as mensagens deste canal ({ctx.channel.mention})?** "
+            "Isso inclui mensagens fixadas e não pode ser desfeito. Confirme em até 60 segundos.",
+            view=view,
+        )
+        if await view.wait():
+            try:
+                await aviso.edit(content="Confirmação expirada. Nenhuma mensagem foi apagada.", view=None)
+            except discord.HTTPException:
+                pass
+
+    @limpar_chat.error
+    async def limpar_chat_erro(self, ctx, erro):
+        if isinstance(erro, commands.MissingPermissions):
+            await ctx.send("Somente administradores podem limpar o chat.")
+        elif isinstance(erro, commands.NoPrivateMessage):
+            await ctx.send("Este comando só pode ser usado em um servidor.")
+        elif isinstance(erro, commands.MaxConcurrencyReached):
+            await ctx.send("Já existe uma limpeza em andamento neste canal.")
+        else:
+            raise erro
 
     @commands.command(name="regras")
     @commands.guild_only()
