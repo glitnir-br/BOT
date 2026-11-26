@@ -3,12 +3,38 @@ import os
 import re
 
 import aiohttp
+import discord
 from discord.ext import commands
 
+import config
 
 ARQUIVO_PADRAO = "/.config/unity3d/IronGate/Valheim/permittedlist.txt"
 ARQUIVO_BANIDOS_PADRAO = "/.config/unity3d/IronGate/Valheim/bannedlist.txt"
 STEAM_ID64 = re.compile(r"^\d{17}$")
+
+
+class ConfirmarRemocao(discord.ui.View):
+    def __init__(self, autor_id):
+        super().__init__(timeout=60)
+        self.autor_id = autor_id
+        self.confirmado = False
+
+    async def interaction_check(self, interaction):
+        if interaction.user.id != self.autor_id or not interaction.user.guild_permissions.administrator:
+            await interaction.response.send_message("Apenas o administrador que iniciou o comando pode confirmar ou cancelar.", ephemeral=True)
+            return False
+        return True
+
+    @discord.ui.button(label="Confirmar remoção", style=discord.ButtonStyle.danger)
+    async def confirmar(self, interaction, button):
+        self.confirmado = True
+        self.stop()
+        await interaction.response.edit_message(content="Remoção confirmada. Processando...", view=None)
+
+    @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
+    async def cancelar(self, interaction, button):
+        self.stop()
+        await interaction.response.edit_message(content="Remoção cancelada. Nenhum cargo foi removido.", view=None)
 
 
 class Whitelist(commands.Cog):
@@ -48,6 +74,55 @@ class Whitelist(commands.Cog):
     @staticmethod
     def steam_id_valido(steam_id):
         return bool(STEAM_ID64.fullmatch(steam_id))
+
+    @commands.command(name="remover_cargo_whitelist")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    @commands.max_concurrency(1, per=commands.BucketType.guild)
+    async def remover_cargo_whitelist(self, ctx):
+        """Retira o cargo de whitelist de todos os membros do servidor."""
+        cargo = ctx.guild.get_role(config.CARGO_WHITELIST_ID)
+        if not cargo:
+            await ctx.send("Cargo de whitelist não encontrado. Verifique CARGO_WHITELIST_ID no .env.")
+            return
+        if cargo.is_default() or cargo.managed or not ctx.guild.me.guild_permissions.manage_roles or cargo >= ctx.guild.me.top_role:
+            await ctx.send("Não posso remover esse cargo. Verifique a permissão Gerenciar Cargos e a hierarquia do bot.")
+            return
+
+        await ctx.send("Buscando membros com o cargo de whitelist. Isso pode levar algum tempo.")
+        try:
+            membros = [membro async for membro in ctx.guild.fetch_members(limit=None) if cargo in membro.roles]
+        except discord.HTTPException:
+            await ctx.send("Não foi possível obter a lista completa de membros. Nenhum cargo foi removido.")
+            return
+
+        if not membros:
+            await ctx.send("Nenhum membro possui o cargo de whitelist.")
+            return
+        confirmacao = ConfirmarRemocao(ctx.author.id)
+        mensagem = await ctx.send(
+            f"Remover o cargo **{discord.utils.escape_markdown(cargo.name)}** de **{len(membros)}** membro(s)? "
+            "Esta ação não altera as whitelists dos servidores. Confirme em até 60 segundos.",
+            view=confirmacao,
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        expirou = await confirmacao.wait()
+        if expirou:
+            await mensagem.edit(content="Confirmação expirada. Nenhum cargo foi removido.", view=None)
+            return
+        if not confirmacao.confirmado:
+            return
+
+        removidos = 0
+        falhas = 0
+        for membro in membros:
+            try:
+                await membro.remove_roles(cargo, reason=f"Remoção de whitelist solicitada por {ctx.author} ({ctx.author.id})")
+                removidos += 1
+            except discord.HTTPException as erro:
+                falhas += 1
+                print(f"[Whitelist] Falha ao remover cargo do membro {membro.id}: {erro}")
+        await ctx.send(f"Remoção concluída: **{removidos}** cargo(s) removido(s); **{falhas}** falha(s).")
 
     @commands.command(name="whitelist_test")
     @commands.has_permissions(administrator=True)
@@ -210,12 +285,19 @@ class Whitelist(commands.Cog):
 
     @whitelist_test.error
     @whitelist_add.error
+    @remover_cargo_whitelist.error
     async def comando_erro(self, ctx, erro):
         if isinstance(erro, commands.MissingPermissions):
             await ctx.send("Apenas administradores podem usar este comando.")
             return
         if isinstance(erro, commands.MissingRequiredArgument):
             await ctx.send("Uso: `!whitelist_test <SteamID64>` ou `!whitelist_add <SteamID64>`")
+            return
+        if isinstance(erro, commands.NoPrivateMessage):
+            await ctx.send("Este comando só pode ser usado em um servidor.")
+            return
+        if isinstance(erro, commands.MaxConcurrencyReached):
+            await ctx.send("Já existe uma remoção de cargos em andamento.")
             return
         raise erro
 
