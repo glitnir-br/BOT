@@ -1,5 +1,7 @@
 ﻿import asyncio
 
+from pathlib import Path
+
 import discord
 from discord.ext import commands
 
@@ -7,6 +9,12 @@ import config
 from utils import storage
 
 DATA_FILE = "modpack.json"
+IMAGENS_GUIA = Path(__file__).resolve().parent.parent / "assets" / "guia_gale"
+ETAPAS_VISUAIS = (
+    ("1. Menu de importação", "No Gale, selecione Importar → perfil via código.", "menu-importar.png"),
+    ("2. Informe o código", "Cole o código atualizado do guia. Esta imagem mostra um código de exemplo.", "codigo-exemplo.png"),
+    ("3. Inicie com mods", "Após importar e selecionar o perfil, clique em Iniciar com mods.", "iniciar.png"),
+)
 
 
 def embed_guia(codigo):
@@ -14,25 +22,48 @@ def embed_guia(codigo):
     return discord.Embed(
         title="🛠️ Guia de instalação — Modpack Glitnir",
         description=(
-            "Prepare seu Valheim para entrar em Glitnir.\n\n"
-            "**1️⃣ Instale o Gale**\n"
-            "Baixe o Gale Mod Manager pela [Hexium](https://hexium.gg/mod-manager) "
-            "ou pela [Thunderstore](https://thunderstore.io/c/valheim/p/Kesomannen/GaleModManager/).\n\n"
+            "Siga os passos abaixo para instalar o perfil de Glitnir e iniciar o Valheim com os mods do servidor.\n\n"
+            "**1️⃣ Baixe e instale o Gale**\n"
+            "Acesse a [Hexium](https://hexium.gg/mod-manager) ou a "
+            "[Thunderstore](https://thunderstore.io/c/valheim/p/Kesomannen/GaleModManager/) e baixe o Gale. "
+            "No Windows, extraia o arquivo caso o download venha em `.zip` e execute o instalador `.msi`.\n\n"
             "**2️⃣ Selecione o Valheim**\n"
-            "Abra o Gale, selecione Valheim e, se solicitado, indique a pasta do jogo.\n\n"
-            "**3️⃣ Importe o modpack**\n"
-            "Na tela de perfis, escolha a opção de importar por código e informe:\n"
+            "Abra o Gale e escolha **Valheim** na lista de jogos. Se o programa pedir a localização do jogo, "
+            "selecione a pasta onde ele está instalado.\n\n"
+            "**3️⃣ Importe o perfil de Glitnir**\n"
+            "No menu superior do Gale, clique em **Importar → perfil via código**. "
+            "Copie e cole o código abaixo na janela **Importar perfil**, clique em **Importar** "
+            "e aguarde todos os downloads terminarem:\n"
             f"```\n{exibicao}\n```"
-            "Aguarde a instalação terminar.\n\n"
-            "**4️⃣ Inicie com mods**\n"
-            "Selecione o perfil de Glitnir e inicie o jogo com mods pelo Gale.\n\n"
+            "**4️⃣ Inicie o jogo com mods**\n"
+            "Abra o perfil importado e clique em **Iniciar com mods**. "
+            "Para jogar em Glitnir, inicie sempre o jogo por esse perfil no Gale.\n\n"
             "**5️⃣ Entre no servidor**\n"
             "Use seu personagem exclusivo de Glitnir e conecte-se ao servidor informado pela equipe.\n\n"
-            "**Atualizações e ajuda**\n"
-            "Acompanhe os avisos da equipe. Se precisar de ajuda, abra um ticket e envie uma imagem do erro."
+            "**🔄 Quando o modpack for atualizado**\n"
+            "A equipe publicará o novo código nos avisos. Importe o código atualizado no Gale "
+            "e aguarde a instalação terminar antes de entrar no servidor.\n\n"
+            "**❓ Problemas comuns**\n"
+            "• **Os mods não carregaram?** Confira se abriu o perfil correto e usou **Iniciar com mods**.\n"
+            "• **Erro na importação?** Confira se copiou o código completo e tente novamente.\n"
+            "• **Não consegue entrar?** Confira os avisos e se está usando o código mais recente.\n\n"
+            "Se precisar de ajuda, abra um ticket de suporte e envie uma imagem da mensagem de erro."
         ),
         color=config.COR_GLITNIR,
     )
+
+
+def embeds_guia(codigo):
+    embeds = [embed_guia(codigo)]
+    for titulo, descricao, nome in ETAPAS_VISUAIS:
+        embed = discord.Embed(title=titulo, description=descricao, color=config.COR_GLITNIR)
+        embed.set_image(url=f"attachment://{nome}")
+        embeds.append(embed)
+    return embeds
+
+
+def arquivos_guia():
+    return [discord.File(IMAGENS_GUIA / nome, filename=nome) for _, _, nome in ETAPAS_VISUAIS]
 
 
 class CodigoModal(discord.ui.Modal, title="Atualizar código do modpack"):
@@ -136,7 +167,7 @@ class Modpack(commands.Cog):
             return
         async with self.lock:
             dados = self.dados.setdefault(str(ctx.guild.id), {})
-            mensagem = await canal.send(embed=embed_guia(dados.get("codigo", "")), allowed_mentions=discord.AllowedMentions.none())
+            mensagem = await canal.send(embeds=embeds_guia(dados.get("codigo", "")), files=arquivos_guia(), allowed_mentions=discord.AllowedMentions.none())
             dados.update({"canal": canal.id, "mensagem": mensagem.id})
             storage.save_json(DATA_FILE, self.dados)
         await ctx.send(f"Guia publicado em {canal.mention}. Este será o guia atualizado pelo painel.", delete_after=15)
@@ -177,7 +208,7 @@ class Modpack(commands.Cog):
                 return
             try:
                 mensagem = await canal.fetch_message(dados["mensagem"])
-                await mensagem.edit(embed=embed_guia(codigo), allowed_mentions=discord.AllowedMentions.none())
+                await mensagem.edit(embeds=embeds_guia(codigo), attachments=arquivos_guia(), allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException as erro:
                 print(f"[Modpack] Falha ao atualizar guia: {erro}")
                 await interaction.followup.send("Não foi possível atualizar o guia. Verifique o canal e as permissões do bot.", ephemeral=True)
@@ -218,7 +249,7 @@ class Modpack(commands.Cog):
                 return
             try:
                 mensagem = await canal.fetch_message(dados["mensagem"])
-                await mensagem.edit(embed=embed_guia(""), allowed_mentions=discord.AllowedMentions.none())
+                await mensagem.edit(embeds=embeds_guia(""), attachments=arquivos_guia(), allowed_mentions=discord.AllowedMentions.none())
             except discord.HTTPException as erro:
                 print(f"[Modpack] Falha ao limpar guia: {erro}")
                 await interaction.followup.send("Não foi possível atualizar o guia. Verifique o canal e as permissões do bot.", ephemeral=True)
