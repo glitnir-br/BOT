@@ -56,7 +56,7 @@ class MensagemModal(ui.Modal, title="Enviar mensagem"):
             return
         await interaction.response.defer(ephemeral=True)
         try:
-            embed = discord.Embed(description=texto, color=config.COR_GLITNIR)
+            embed = discord.Embed(description=f"{texto}\n\nEnviado por {interaction.user.mention}", color=config.COR_GLITNIR)
             kwargs = {}
             if anexo:
                 arquivo = await anexo.to_file()
