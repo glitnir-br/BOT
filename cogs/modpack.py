@@ -145,28 +145,47 @@ class Modpack(commands.Cog):
             storage.save_json(DATA_FILE, self.dados)
         await ctx.send(f"Guia publicado em {canal.mention}. Este será o guia atualizado pelo painel.", delete_after=15)
 
-    @commands.command(name="painel_modpack")
-    @commands.guild_only()
-    @commands.has_permissions(administrator=True)
-    async def painel(self, ctx):
-        canal_avisos = ctx.guild.get_channel(config.CANAL_AVISOS_INTERNOS_ID)
+    def embed_painel(self, guild):
+        canal_avisos = guild.get_channel(config.CANAL_AVISOS_INTERNOS_ID)
         referencia_avisos = canal_avisos.mention if canal_avisos else "canal de avisos internos"
-        canal_guia = ctx.guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
+        canal_guia = guild.get_channel(config.CANAL_GUIA_MODPACK_ID)
         referencia_guia = canal_guia.mention if canal_guia else "canal do guia de instalação"
-        embed = discord.Embed(
+        codigo = self.dados.get(str(guild.id), {}).get("codigo") or "Ainda não configurado"
+        return discord.Embed(
             title="🛠️ Gerenciamento do modpack",
             description=(
+                f"**Código atual:**\n```\n{codigo}\n```\n"
                 "Quando houver uma nova versão do modpack, clique em **Atualizar código** e informe o novo código do perfil do Gale.\n\n"
                 f"O bot atualizará o guia em {referencia_guia} e enviará um aviso com **@everyone** em {referencia_avisos}.\n\n"
                 "Para limpar o código do guia, use **Remover código** e confirme a operação."
             ),
             color=config.COR_GLITNIR,
         )
-        await ctx.send(
-            embed=embed,
+
+    @commands.command(name="painel_modpack")
+    @commands.guild_only()
+    @commands.has_permissions(administrator=True)
+    async def painel(self, ctx):
+        mensagem = await ctx.send(
+            embed=self.embed_painel(ctx.guild),
             view=PainelModpack(),
             allowed_mentions=discord.AllowedMentions.none(),
         )
+        dados = self.dados.setdefault(str(ctx.guild.id), {})
+        dados.update(painel_canal=ctx.channel.id, painel_mensagem=mensagem.id)
+        storage.save_json(DATA_FILE, self.dados)
+
+    async def atualizar_painel(self, guild, dados):
+        canal = guild.get_channel(dados.get("painel_canal"))
+        if not canal or not dados.get("painel_mensagem"):
+            return False
+        try:
+            mensagem = await canal.fetch_message(dados["painel_mensagem"])
+            await mensagem.edit(embed=self.embed_painel(guild), view=PainelModpack(), allowed_mentions=discord.AllowedMentions.none())
+            return True
+        except discord.HTTPException as erro:
+            print(f"[Modpack] Falha ao atualizar painel: {erro}")
+            return False
 
     async def atualizar(self, interaction, codigo):
         async with self.lock:
@@ -193,6 +212,7 @@ class Modpack(commands.Cog):
                 print(f"[Modpack] Falha ao salvar código: {erro}")
                 await interaction.followup.send("O guia foi atualizado, mas não foi possível salvar o código. Avise a equipe.", ephemeral=True)
                 return
+            painel_atualizado = await self.atualizar_painel(interaction.guild, dados)
             try:
                 await avisos.send(
                     content="@everyone",
@@ -208,7 +228,10 @@ class Modpack(commands.Cog):
                 print(f"[Modpack] Falha ao enviar aviso: {erro}")
                 await interaction.followup.send("O guia e o código foram atualizados, mas não consegui enviar o aviso. Verifique as permissões do canal de avisos.", ephemeral=True)
                 return
-            await interaction.followup.send("Código atualizado no guia e aviso publicado.", ephemeral=True)
+            texto = "Código atualizado no guia e aviso publicado."
+            if not painel_atualizado:
+                texto += " Publique novamente o painel com `!painel_modpack` para mostrar o código atual."
+            await interaction.followup.send(texto, ephemeral=True)
 
     async def remover_codigo(self, interaction, codigo_esperado):
         async with self.lock:
@@ -235,7 +258,11 @@ class Modpack(commands.Cog):
                 print(f"[Modpack] Falha ao salvar remoção: {erro}")
                 await interaction.followup.send("O guia foi alterado, mas a remoção não foi salva. Avise a equipe.", ephemeral=True)
                 return
-            await interaction.followup.send("Código removido e guia atualizado.", ephemeral=True)
+            painel_atualizado = await self.atualizar_painel(interaction.guild, dados)
+            texto = "Código removido e guia atualizado."
+            if not painel_atualizado:
+                texto += " Publique novamente o painel com `!painel_modpack` para atualizar o card."
+            await interaction.followup.send(texto, ephemeral=True)
 
 
 async def setup(bot):
