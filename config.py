@@ -35,6 +35,7 @@ CHAT_GERAL_ID = _int_env("CHAT_GERAL_ID")
 CHAT_VOZ_ID = _int_env("CHAT_VOZ_ID")
 CATEGORIA_GUILDAS_ID = _int_env("CATEGORIA_GUILDAS_ID")
 BEM_VINDO_ID = _int_env("BEM_VINDO_ID")
+CANAL_COMECE_AQUI_ID = _int_env("CANAL_COMECE_AQUI_ID")
 APRESENTESE_ID = _int_env("APRESENTESE_ID")
 SUPPORT_CATEGORY_ID = _int_env_qualquer("SUPPORT_CATEGORY_ID", "CATEGORIA_SUPORTE_ID")  # categoria fallback se o tipo de ticket não tiver uma própria
 # Alias mantido para compatibilidade com o nome usado no .env atual.

@@ -27,12 +27,13 @@ DESCRICOES = {
     "cargo_painel": "Cria um painel de cargos: `!cargo_painel \"Título\" \"Descrição\" @cargo`.",
     "anunciar": "Anuncia canais pelos IDs: `!anunciar <ID> [outros IDs]`.",
     "testar_boasvindas": "Testa a mensagem de boas-vindas.",
+    "painel_apresentacao": "Publica a mensagem de reação para receber o cargo inicial.",
 }
 
 CATEGORIAS_AJUDA = {
     "📋 Painéis": (
         "ticket_painel", "whitelist_painel", "guilda_painel", "doacao_painel",
-        "vip_painel", "envio_dados_painel", "painel_mensagens", "painel_modpack", "cargo_painel",
+        "vip_painel", "envio_dados_painel", "painel_mensagens", "painel_modpack", "cargo_painel", "painel_apresentacao",
     ),
     "🛡️ Gestão": ("criar_ticket", "fechar", "guilda_lider", "remover_cargo_whitelist", "whitelist_add"),
     "📢 Publicações": ("guia_modpack", "regras", "text", "editar", "anunciar"),
