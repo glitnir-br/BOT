@@ -275,16 +275,22 @@ class MenuGuilda(discord.ui.Select):
         ])
 
     async def callback(self, interaction):
-        if self.values[0] == "excluir":
-            await self.view.excluir(interaction)
-        elif self.values[0] == "editar":
-            cog = interaction.client.get_cog("Guildas")
-            if not cog or not cog.eh_lider(interaction):
-                await interaction.response.send_message("Somente o líder pode editar a guilda.", ephemeral=True)
-                return
-            await interaction.response.send_modal(EditarGuilda())
-        else:
-            await self.view.escolher(interaction, self.values[0])
+        try:
+            if self.values[0] == "excluir":
+                await self.view.excluir(interaction)
+            elif self.values[0] == "editar":
+                cog = interaction.client.get_cog("Guildas")
+                if not cog or not cog.eh_lider(interaction):
+                    await interaction.response.send_message("Somente o líder pode editar a guilda.", ephemeral=True)
+                    return
+                await interaction.response.send_modal(EditarGuilda())
+            else:
+                await self.view.escolher(interaction, self.values[0])
+        finally:
+            try:
+                await interaction.message.edit(view=ControlesGuilda())
+            except discord.HTTPException as erro:
+                print(f"[Guildas] Não foi possível limpar a seleção do menu: {erro}")
 
 
 class ControlesGuilda(discord.ui.View):
