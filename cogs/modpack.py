@@ -17,47 +17,20 @@ ETAPAS_VISUAIS = (
 )
 
 
-def embed_guia(codigo):
-    exibicao = codigo or "Ainda não configurado pela equipe"
-    return discord.Embed(
-        title="🛠️ Guia de instalação — Modpack Glitnir",
-        description=(
-            "Siga os passos abaixo para instalar o perfil de Glitnir e iniciar o Valheim com os mods do servidor.\n\n"
-            "**1️⃣ Baixe e instale o Gale**\n"
-            "Acesse a [Hexium](https://hexium.gg/mod-manager) ou a "
-            "[Thunderstore](https://thunderstore.io/c/valheim/p/Kesomannen/GaleModManager/) e baixe o Gale. "
-            "No Windows, extraia o arquivo caso o download venha em `.zip` e execute o instalador `.msi`.\n\n"
-            "**2️⃣ Selecione o Valheim**\n"
-            "Abra o Gale e escolha **Valheim** na lista de jogos. Se o programa pedir a localização do jogo, "
-            "selecione a pasta onde ele está instalado.\n\n"
-            "**3️⃣ Importe o perfil de Glitnir**\n"
-            "No menu superior do Gale, clique em **Importar → perfil via código**. "
-            "Copie e cole o código abaixo na janela **Importar perfil**, clique em **Importar** "
-            "e aguarde todos os downloads terminarem:\n"
-            f"```\n{exibicao}\n```"
-            "**4️⃣ Inicie o jogo com mods**\n"
-            "Abra o perfil importado e clique em **Iniciar com mods**. "
-            "Para jogar em Glitnir, inicie sempre o jogo por esse perfil no Gale.\n\n"
-            "**5️⃣ Entre no servidor**\n"
-            "Use seu personagem exclusivo de Glitnir e conecte-se ao servidor informado pela equipe.\n\n"
-            "**🔄 Quando o modpack for atualizado**\n"
-            "A equipe publicará o novo código nos avisos. Importe o código atualizado no Gale "
-            "e aguarde a instalação terminar antes de entrar no servidor.\n\n"
-            "**❓ Problemas comuns**\n"
-            "• **Os mods não carregaram?** Confira se abriu o perfil correto e usou **Iniciar com mods**.\n"
-            "• **Erro na importação?** Confira se copiou o código completo e tente novamente.\n"
-            "• **Não consegue entrar?** Confira os avisos e se está usando o código mais recente.\n\n"
-            "Se precisar de ajuda, abra um ticket de suporte e envie uma imagem da mensagem de erro."
-        ),
-        color=config.COR_GLITNIR,
-    )
-
-
 def embeds_guia(codigo):
-    embeds = [embed_guia(codigo)]
-    for titulo, descricao, nome in ETAPAS_VISUAIS:
+    exibicao = codigo or "Ainda não configurado pela equipe"
+    secoes = [
+        ("🛠️ Guia de instalação — Modpack Glitnir", "Siga os passos abaixo para instalar o perfil de Glitnir e iniciar o Valheim com os mods do servidor.\n\n**1️⃣ Baixe e instale o Gale**\nAcesse a [Hexium](https://hexium.gg/mod-manager) ou a [Thunderstore](https://thunderstore.io/c/valheim/p/Kesomannen/GaleModManager/) e baixe o Gale. No Windows, extraia o arquivo se vier em `.zip` e execute o instalador `.msi`.\n\n**2️⃣ Selecione o Valheim**\nAbra o Gale e escolha **Valheim**. Se necessário, indique a pasta onde o jogo está instalado.", None),
+        ("3️⃣ Importe o perfil", "No menu superior do Gale, clique em **Importar → perfil via código**.", "menu-importar.png"),
+        ("Cole o código do modpack", f"Na janela **Importar perfil**, cole o código abaixo, clique em **Importar** e aguarde os downloads terminarem:\n```\n{exibicao}\n```A imagem mostra um código fictício; use o código acima.", "codigo-exemplo.png"),
+        ("4️⃣ Inicie o jogo com mods", "Abra o perfil importado e clique em **Iniciar com mods**. Sempre inicie o jogo por esse perfil no Gale para jogar em Glitnir.", "iniciar.png"),
+        ("5️⃣ Entre no servidor", "Use seu personagem exclusivo de Glitnir e conecte-se ao servidor informado pela equipe.\n\n**🔄 Atualizações**\nQuando a equipe publicar um novo código, importe-o no Gale e aguarde a instalação antes de entrar.\n\n**❓ Problemas comuns**\n• Mods não carregaram? Confira o perfil e use **Iniciar com mods**.\n• Erro na importação? Confira se copiou o código completo.\n• Não consegue entrar? Confira os avisos e o código mais recente.\n\nSe precisar de ajuda, abra um ticket e envie uma imagem do erro.", None),
+    ]
+    embeds = []
+    for titulo, descricao, nome in secoes:
         embed = discord.Embed(title=titulo, description=descricao, color=config.COR_GLITNIR)
-        embed.set_image(url=f"attachment://{nome}")
+        if nome:
+            embed.set_image(url=f"attachment://{nome}")
         embeds.append(embed)
     return embeds
 
