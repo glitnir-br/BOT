@@ -2,9 +2,11 @@ import asyncio
 import os
 
 import a2s
+import aiohttp
 import discord
 from dotenv import load_dotenv
 from discord.ext import commands, tasks
+from cogs.whitelist import Whitelist
 
 load_dotenv()
 
@@ -16,8 +18,8 @@ FALHAS_PARA_BACKOFF = 5
 WORLD_BIOME = os.getenv("WORLD_BIOME", "Prado")
 
 SERVIDORES = (
-    {"nome": "Glitnir Awakening - Server 1", "ip": "162.43.190.115", "porta": 2501},
-    {"nome": "Glitnir Awakening - Server 2", "ip": "162.43.190.115", "porta": 2051},
+    {"nome": "Glitnir Awakening - Server 1", "ip": "162.43.190.115", "porta": 2501, "servidor": "server_1"},
+    {"nome": "Glitnir Awakening - Server 2", "ip": "162.43.190.115", "porta": 2051, "servidor": "server_2"},
 )
 
 
@@ -30,6 +32,20 @@ class ServerStatus(commands.Cog):
     def cog_unload(self):
         self.status_loop.cancel()
 
+    async def consultar_manutencao(self, servidor):
+        config = Whitelist.configuracao(servidor)
+        if not Whitelist.configuracao_valida(config):
+            raise ValueError("Pterodactyl não configurado")
+        url = f'{config["panel"]}/api/client/servers/{config["server_id"]}/files/list'
+        headers = {"Authorization": f'Bearer {config["api_key"]}',
+                   "Accept": "Application/vnd.pterodactyl.v1+json"}
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15)) as session:
+            async with session.get(url, headers=headers, params={"directory": "/BepInEx/config"}) as resposta:
+                resposta.raise_for_status()
+                dados = await resposta.json()
+        return any(item["attributes"]["name"] == "maintenance" and item["attributes"].get("is_file", False)
+                   for item in dados["data"])
+
     async def consultar_servidor(self, config):
         try:
             info = await asyncio.wait_for(
@@ -38,8 +54,14 @@ class ServerStatus(commands.Cog):
                 ),
                 timeout=10,
             )
+            try:
+                manutencao = await self.consultar_manutencao(config["servidor"])
+            except (aiohttp.ClientError, asyncio.TimeoutError, ValueError, KeyError) as erro:
+                print(f'[Server Status] Erro ao consultar manutenção de {config["nome"]}: {erro}')
+                manutencao = None
             return {
                 "online": True,
+                "manutencao": manutencao,
                 "jogadores": info.player_count,
                 "max_jogadores": info.max_players,
             }
@@ -49,7 +71,7 @@ class ServerStatus(commands.Cog):
 
     def criar_painel(self, statuses):
         online = sum(status["online"] for status in statuses)
-        if online == len(statuses):
+        if online == len(statuses) and all(status.get("manutencao") is False for status in statuses):
             cor = discord.Color.green()
             resumo = "Todos os servidores est\u00e3o online"
         elif online == 0:
@@ -70,7 +92,12 @@ class ServerStatus(commands.Cog):
 
         for indice, (config, status) in enumerate(zip(SERVIDORES, statuses)):
             if status["online"]:
-                indicador = "\N{LARGE GREEN CIRCLE} ONLINE"
+                if status.get("manutencao") is True:
+                    indicador = "\N{LARGE YELLOW CIRCLE} EM MANUTENÇÃO"
+                elif status.get("manutencao") is None:
+                    indicador = "\N{LARGE YELLOW CIRCLE} ONLINE · MANUTENÇÃO NÃO VERIFICADA"
+                else:
+                    indicador = "\N{LARGE GREEN CIRCLE} ONLINE"
                 detalhes = (
                     f"**{indicador}**\n"
                     f"\N{BUSTS IN SILHOUETTE} Jogadores: "
