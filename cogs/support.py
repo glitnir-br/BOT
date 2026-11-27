@@ -1124,10 +1124,48 @@ class PacoteVipSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         pacote_escolhido = self.values[0]
+        if pacote_escolhido.startswith("Ragnarok"):
+            await interaction.response.edit_message(
+                content="Escolha uma montaria terrestre para o seu pacote Ragnarok:",
+                view=MontariaVipView(pacote_escolhido, self.view.mensagem_para_apagar),
+            )
+            return
         respostas_extras = [("Pacote VIP escolhido", pacote_escolhido)]
         await interaction.response.send_modal(
             CategoriaModal("VIP", respostas_extras, mensagem_para_apagar=self.view.mensagem_para_apagar)
         )
+
+
+class MontariaVipSelect(ui.Select):
+    def __init__(self, pacote: str, mensagem_para_apagar):
+        self.pacote = pacote
+        self.mensagem_para_apagar = mensagem_para_apagar
+        options = [
+            discord.SelectOption(label="Javali", value="Ring_Glitnir_Boar"),
+            discord.SelectOption(label="Fenris", value="Ring_Glitnir_Fenris"),
+            discord.SelectOption(label="Lox de Gelo", value="Ring_Glitnir_Lox2"),
+        ]
+        super().__init__(
+            placeholder="Escolha sua montaria...", min_values=1, max_values=1, options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        codigo = self.values[0]
+        nome = next(option.label for option in self.options if option.value == codigo)
+        respostas_extras = [
+            ("Pacote VIP escolhido", self.pacote),
+            ("Montaria escolhida", nome),
+            ("Código do anel de montaria", codigo),
+        ]
+        await interaction.response.send_modal(
+            CategoriaModal("VIP", respostas_extras, mensagem_para_apagar=self.mensagem_para_apagar)
+        )
+
+
+class MontariaVipView(ui.View):
+    def __init__(self, pacote: str, mensagem_para_apagar):
+        super().__init__(timeout=180)
+        self.add_item(MontariaVipSelect(pacote, mensagem_para_apagar))
 
 
 class PacoteVipView(ui.View):
