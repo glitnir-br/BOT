@@ -74,9 +74,10 @@ VALORES_DOACAO = [
 
 # Opções de pacote VIP — aparecem como menu de seleção antes do formulário.
 PACOTES_VIP = [
-    "Midgard — R$ 50,00",
-    "Asgard — R$ 100,00",
-    "Valhalla — R$ 150,00",
+    "Midgard — R$ 19,90",
+    "Asgard — R$ 39,90",
+    "Valhalla — R$ 59,90",
+    "Ragnarok — R$ 100,00",
 ]
 
 # Perguntas do formulário de cada categoria: (label, estilo, placeholder, tamanho_max)
@@ -1138,40 +1139,43 @@ class PacoteVipView(ui.View):
 
 def embed_painel_vip() -> tuple[discord.Embed, discord.File | None]:
     embed = discord.Embed(
-        title="👑 PACOTES VIP GLITNIR",
+        title="👑 PACOTES VIP GLITNIR AWAKENING",
         description=(
-            "Escolha seu pacote VIP abaixo. Após a compra, você recebe uma **moeda VIP** "
-            "para resgatar os itens no NPC. A liberação dos wards e do território deve ser "
-            "solicitada à administração.\n\n"
-            "**Os pacotes podem ser comprados novamente**, entregando os itens a cada resgate. "
-            "O limite de wards e o território não acumulam, e sua categoria VIP mais alta é preservada.\n\n"
+            "Escolha seu pacote e apoie o servidor!\n\n"
+            "**📦 Cada pacote inclui todos os itens descritos no respectivo nível. "
+            "As quantidades não se somam às dos anteriores.**\n\n"
             "*Clique no botão para ver o QR Code/PIX, escolher o pacote e abrir seu ticket.*"
         ),
         color=CORES_CATEGORIA["VIP"],
     )
+    ferramentas = (
+        "• 1 Cultivador Eterno\n"
+        "• 1 Enxada Eterna\n"
+        "• 1 Foice Eterna\n"
+    )
+    asgard = ferramentas + "• 1 Martelo Dourado\n• 1 Portal Embalado\n"
+    valhalla = asgard + "• 1 Selo do Baú\n• 1 Karve Embalado\n"
     embed.add_field(
-        name="🛡️ VIP Midgard — R$ 50,00",
-        value=(
-            "Inclui **8 Moedas Glitnir**, **1 Runa de Odin** e **1 Foice Eterna**, "
-            "com durabilidade infinita. Libera **3 wards** e **1 território com 30 metros de raio**."
-        ),
+        name="🛡️ MIDGARD — R$ 19,90",
+        value=ferramentas + "• **3 Moedas Glitnir**",
         inline=False,
     )
     embed.add_field(
-        name="⚔️ VIP Asgard — R$ 100,00",
-        value=(
-            "Inclui **18 Moedas Glitnir**, **2 Runas de Odin**, **1 Foice Eterna** e "
-            "**1 Enxada Eterna**, ambas com durabilidade infinita. Libera **3 wards** e "
-            "**1 território com 50 metros de raio**."
-        ),
+        name="⚔️ ASGARD — R$ 39,90",
+        value=asgard + "• **6 Moedas Glitnir**",
         inline=False,
     )
     embed.add_field(
-        name="👑 VIP Valhalla — R$ 150,00",
+        name="👑 VALHALLA — R$ 59,90",
+        value=valhalla + "• **10 Moedas Glitnir**",
+        inline=False,
+    )
+    embed.add_field(
+        name="🔥 RAGNAROK — R$ 100,00",
         value=(
-            "Inclui **30 Moedas Glitnir**, **3 Runas de Odin** e o conjunto completo: "
-            "**Foice Eterna, Enxada Eterna e Martelo Eterno**, todos com durabilidade infinita. "
-            "Libera **3 wards** e **1 território com 80 metros de raio**."
+            valhalla
+            + "• **1 anel de montaria à escolha: Javali, Fenris ou Lox de Gelo**\n"
+            + "• **15 Moedas Glitnir**"
         ),
         inline=False,
     )
