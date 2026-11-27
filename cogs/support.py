@@ -589,7 +589,7 @@ class WhitelistTicketView(TicketControlView):
     async def aprovar_server_1(self, interaction: discord.Interaction, button: ui.Button):
         await self._aprovar(interaction, "server_1")
 
-    @ui.button(label="Server 2", emoji="✅", style=discord.ButtonStyle.success, custom_id="support:aprovar_whitelist:server_2")
+    @ui.button(label="Server 2", emoji="✅", style=discord.ButtonStyle.success, custom_id="support:aprovar_whitelist:server_2", disabled=True)
     async def aprovar_server_2(self, interaction: discord.Interaction, button: ui.Button):
         await self._aprovar(interaction, "server_2")
 
