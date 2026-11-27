@@ -24,7 +24,9 @@ def ler_cor(valor):
     valor = valor.strip()
     if not re.fullmatch(r"#?[0-9a-fA-F]{6}", valor):
         raise ValueError("Cor inválida")
-    return discord.Color(int(valor.lstrip("#"), 16))
+    cor = int(valor.lstrip("#"), 16)
+    # Zero representa ausência de cor no Discord; use um preto quase idêntico.
+    return discord.Color(0x010101 if cor == 0 else cor)
 
 
 class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
