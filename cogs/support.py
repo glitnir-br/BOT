@@ -769,7 +769,7 @@ def _slug_canal(texto: str) -> str:
     return "".join(c for c in texto if c in permitido) or "ticket"
 
 
-async def abrir_ticket(interaction: discord.Interaction, categoria: str, respostas: list):
+async def abrir_ticket(interaction: discord.Interaction, categoria: str, respostas: list, arquivos: list = None):
     """Cria o canal privado do ticket, dentro da categoria configurada, já com as respostas do formulário."""
     categoria_discord = obter_categoria_discord(interaction.guild, categoria)
 
@@ -814,6 +814,7 @@ async def abrir_ticket(interaction: discord.Interaction, categoria: str, respost
         await canal_ticket.send(
             embed=embed_boas_vindas_ticket(categoria, interaction.user, respostas),
             view=view_do_ticket,
+            files=arquivos or [],
         )
 
         confirmacao = await interaction.followup.send(
@@ -836,6 +837,8 @@ class CategoriaModal(ui.Modal):
         self.respostas_extras = respostas_extras or []
         self.mensagem_para_apagar = mensagem_para_apagar
         self.perguntas = PERGUNTAS[categoria]
+        self.montaria = None
+        self.comprovante = None
         self.campos = []
         for pergunta in self.perguntas:
             campo = ui.TextInput(
@@ -852,9 +855,36 @@ class CategoriaModal(ui.Modal):
                 self.add_item(campo)
             self.campos.append(campo)
 
+        if categoria == "VIP":
+            if any(valor.startswith("Ragnarok") for label, valor in self.respostas_extras if label == "Pacote VIP escolhido"):
+                self.montaria = ui.TextInput(
+                    label="Qual montaria você deseja?",
+                    placeholder="Javali, Fenris ou Lox de Gelo",
+                    max_length=100,
+                    required=True,
+                )
+                self.add_item(self.montaria)
+            self.comprovante = ui.FileUpload(min_values=1, max_values=1, required=True)
+            self.add_item(ui.Label(text="Comprovante de pagamento", component=self.comprovante))
+
     async def on_submit(self, interaction: discord.Interaction):
         respostas = [(self.perguntas[i]["label"], self.campos[i].value) for i in range(len(self.campos))]
         await interaction.response.defer(ephemeral=True)
+        arquivos = []
+        if self.montaria is not None:
+            respostas.append(("Montaria escolhida", self.montaria.value))
+        if self.comprovante is not None:
+            if not self.comprovante.values:
+                await interaction.followup.send("Anexe o comprovante de pagamento no formulário.", ephemeral=True)
+                return
+            try:
+                arquivos = [await anexo.to_file() for anexo in self.comprovante.values]
+            except (discord.HTTPException, OSError):
+                await interaction.followup.send(
+                    "Não foi possível carregar o comprovante. Abra o formulário novamente e tente reenviar.",
+                    ephemeral=True,
+                )
+                return
 
         if self.categoria == "Whitelist":
             nickname = next((valor.strip() for label, valor in respostas if label == "Nickname usado no jogo:"), "")
@@ -972,7 +1002,7 @@ class CategoriaModal(ui.Modal):
                 print(f"Erro ao apagar mensagem anterior do ticket: {e}")
 
         respostas += self.respostas_extras
-        await abrir_ticket(interaction, self.categoria, respostas)
+        await abrir_ticket(interaction, self.categoria, respostas, arquivos=arquivos)
 
 
 async def embeds_regras_whitelist(bot):
@@ -1124,48 +1154,10 @@ class PacoteVipSelect(ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         pacote_escolhido = self.values[0]
-        if pacote_escolhido.startswith("Ragnarok"):
-            await interaction.response.edit_message(
-                content="Escolha uma montaria terrestre para o seu pacote Ragnarok:",
-                view=MontariaVipView(pacote_escolhido, self.view.mensagem_para_apagar),
-            )
-            return
         respostas_extras = [("Pacote VIP escolhido", pacote_escolhido)]
         await interaction.response.send_modal(
             CategoriaModal("VIP", respostas_extras, mensagem_para_apagar=self.view.mensagem_para_apagar)
         )
-
-
-class MontariaVipSelect(ui.Select):
-    def __init__(self, pacote: str, mensagem_para_apagar):
-        self.pacote = pacote
-        self.mensagem_para_apagar = mensagem_para_apagar
-        options = [
-            discord.SelectOption(label="Javali", value="Ring_Glitnir_Boar"),
-            discord.SelectOption(label="Fenris", value="Ring_Glitnir_Fenris"),
-            discord.SelectOption(label="Lox de Gelo", value="Ring_Glitnir_Lox2"),
-        ]
-        super().__init__(
-            placeholder="Escolha sua montaria...", min_values=1, max_values=1, options=options
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-        codigo = self.values[0]
-        nome = next(option.label for option in self.options if option.value == codigo)
-        respostas_extras = [
-            ("Pacote VIP escolhido", self.pacote),
-            ("Montaria escolhida", nome),
-            ("Código do anel de montaria", codigo),
-        ]
-        await interaction.response.send_modal(
-            CategoriaModal("VIP", respostas_extras, mensagem_para_apagar=self.mensagem_para_apagar)
-        )
-
-
-class MontariaVipView(ui.View):
-    def __init__(self, pacote: str, mensagem_para_apagar):
-        super().__init__(timeout=180)
-        self.add_item(MontariaVipSelect(pacote, mensagem_para_apagar))
 
 
 class PacoteVipView(ui.View):
@@ -1237,7 +1229,7 @@ class VipPanelView(ui.View):
         await interaction.response.send_message(
             content=(
                 "Use o QR Code/PIX abaixo para realizar o pagamento, escolha o pacote VIP "
-                "e envie o comprovante no ticket após preenchê-lo:"
+                "e anexe o comprovante no formulário com seus dados:"
             ),
             embed=embed_pix,
             view=view,
