@@ -77,3 +77,5 @@ E adiciona o caminho `"cogs.meu_arquivo"` na lista `EXTENSIONS` do `main.py`.
 - Para a whitelist de dois servidores, configure `PTERODACTYL_SERVER_ID` (Server 1, mantido por compatibilidade) e `PTERODACTYL_SERVER_2_ID` (Server 2). Ambos usam a mesma URL, chave de API e caminho definidos nas demais variáveis `PTERODACTYL_*`.
 - A checagem de SteamID banida usa `bannedlist.txt` no diretório padrão do Valheim. Se o caminho for diferente, defina `PTERODACTYL_BANLIST_PATH`. Os avisos são enviados para `CANAL_AVISOS_ID`; se ela não estiver configurada, o bot usa `CANAL_LOG_ID`.
 
+
+- Configure `CARGO_REFERENCIA_GUILDAS_ID` no `.env` com o ID do cargo de referência, abaixo do qual os novos cargos de guilda ficam. A referência deve estar abaixo do cargo do bot e ser diferente de @everyone. Sem ela, a criação será recusada. Novos cargos exibem membros separadamente. A cor hexadecimal (ex.: `#FF8800`) pode ser escolhida na criação e editada junto com nome e emoji. A edição abre com os valores atuais preenchidos. Cargos existentes não são reposicionados automaticamente.

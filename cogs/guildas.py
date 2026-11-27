@@ -13,16 +13,25 @@ DATA_FILE = "guildas.json"
 DESCRICAO_PAINEL = (
     "🛡️ **Guildas Glitnir**\n\n"
     "Reúna seus companheiros e crie um espaço para sua guilda!\n\n"
-    "Clique em **Criar chat de guilda** para escolher um nome e um emoji. "
+    "Clique em **Criar chat de guilda** para escolher um nome, um emoji e uma cor. "
     "O bot criará um canal de voz e um cargo para seus membros.\n\n"
     "Depois, você poderá gerenciar os membros e escolher um vice-líder pelo próprio canal.\n\n"
     "Já participa de uma guilda? Clique em **Minhas guildas** para consultá-las."
 )
 
 
+def ler_cor(valor):
+    valor = valor.strip()
+    if not re.fullmatch(r"#?[0-9a-fA-F]{6}", valor):
+        raise ValueError("Cor inválida")
+    return discord.Color(int(valor.lstrip("#"), 16))
+
+
 class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
     nome = discord.ui.TextInput(label="Nome da guilda", max_length=80)
     icone = discord.ui.TextInput(label="Ícone do chat", placeholder="Exemplo: ⚔️", max_length=20)
+
+    cor = discord.ui.TextInput(label="Cor do cargo (hexadecimal)", placeholder="Exemplo: #FF8800", max_length=7)
 
     async def on_submit(self, interaction):
         nome = str(self.nome).strip()
@@ -33,20 +42,37 @@ class FormularioGuilda(discord.ui.Modal, title="Criar guilda"):
         if not emoji.is_emoji(icone):
             await interaction.response.send_message("Informe exatamente um emoji Unicode como ícone, por exemplo ⚔️.", ephemeral=True)
             return
+        try:
+            cor = ler_cor(str(self.cor))
+        except ValueError:
+            await interaction.response.send_message("Informe uma cor hexadecimal com 6 dígitos, por exemplo #FF8800.", ephemeral=True)
+            return
         nome_final = f"{icone} {nome}"
         if len(nome_final) > 100:
             await interaction.response.send_message("O nome completo, incluindo o ícone, deve ter no máximo 100 caracteres.", ephemeral=True)
             return
         await interaction.response.send_message(
-            f"Criar o cargo e o canal **{discord.utils.escape_markdown(nome_final)}**?",
-            view=ConfirmarCriacao(interaction.user.id, nome_final), ephemeral=True,
+            f"Criar o cargo e o canal **{discord.utils.escape_markdown(nome_final)}** com a cor **{cor}**?",
+            view=ConfirmarCriacao(interaction.user.id, nome_final, cor), ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
 
-class EditarGuilda(discord.ui.Modal, title="Editar nome e emoji da guilda"):
+class EditarGuilda(discord.ui.Modal, title="Editar nome, emoji e cor da guilda"):
     nome = discord.ui.TextInput(label="Novo nome da guilda", max_length=80)
     icone = discord.ui.TextInput(label="Novo emoji", placeholder="Exemplo: ⚔️", max_length=20)
+
+    cor = discord.ui.TextInput(label="Cor do cargo (hexadecimal)", placeholder="Exemplo: #FF8800", max_length=7)
+
+    def __init__(self, cargo):
+        super().__init__()
+        icone, separador, nome = cargo.name.partition(" ")
+        if separador and emoji.is_emoji(icone):
+            self.icone.default = icone
+            self.nome.default = nome
+        else:
+            self.nome.default = cargo.name[:80]
+        self.cor.default = str(cargo.colour)
 
     async def on_submit(self, interaction):
         cog = interaction.client.get_cog("Guildas")
@@ -57,6 +83,11 @@ class EditarGuilda(discord.ui.Modal, title="Editar nome e emoji da guilda"):
         icone = str(self.icone).strip()
         if not nome or re.search(r"[\r\n]", nome) or not emoji.is_emoji(icone):
             await interaction.response.send_message("Informe um nome válido e exatamente um emoji Unicode.", ephemeral=True)
+            return
+        try:
+            cor = ler_cor(str(self.cor))
+        except ValueError:
+            await interaction.response.send_message("Informe uma cor hexadecimal com 6 dígitos, por exemplo #FF8800.", ephemeral=True)
             return
         nome_final = f"{icone} {nome}"
         if len(nome_final) > 100:
@@ -74,29 +105,31 @@ class EditarGuilda(discord.ui.Modal, title="Editar nome e emoji da guilda"):
                 await interaction.followup.send("Canal ou cargo da guilda não encontrado. Avise a equipe.", ephemeral=True)
                 return
             nome_anterior = cargo.name
+            cor_anterior = cargo.colour
             try:
-                await cargo.edit(name=nome_final, reason=f"Guilda editada pelo líder {interaction.user.id}")
+                await cargo.edit(name=nome_final, colour=cor, reason=f"Guilda editada pelo líder {interaction.user.id}")
                 try:
                     await canal.edit(name=nome_final, reason=f"Guilda editada pelo líder {interaction.user.id}")
                 except discord.HTTPException:
                     try:
-                        await cargo.edit(name=nome_anterior, reason="Reverter edição incompleta da guilda")
+                        await cargo.edit(name=nome_anterior, colour=cor_anterior, reason="Reverter edição incompleta da guilda")
                     except discord.HTTPException:
-                        await interaction.followup.send("Não foi possível atualizar o canal nem reverter o cargo. Avise a equipe para corrigir os nomes.", ephemeral=True)
+                        await interaction.followup.send("Não foi possível atualizar o canal nem reverter o cargo. Avise a equipe para corrigir o nome e a cor.", ephemeral=True)
                         return
                     raise
             except discord.HTTPException as erro:
                 print(f"[Guildas] Erro ao editar guilda: {erro}")
                 await interaction.followup.send("Não foi possível editar a guilda. Verifique as permissões do bot.", ephemeral=True)
                 return
-        await interaction.followup.send("Nome e emoji da guilda atualizados no cargo e no canal.", ephemeral=True)
+        await interaction.followup.send("Nome e emoji da guilda atualizados no cargo e no canal; cor do cargo atualizada.", ephemeral=True)
 
 
 class ConfirmarCriacao(discord.ui.View):
-    def __init__(self, autor_id, nome):
+    def __init__(self, autor_id, nome, cor):
         super().__init__(timeout=120)
         self.autor_id = autor_id
         self.nome = nome
+        self.cor = cor
         self.usado = False
 
     @discord.ui.button(label="Criar guilda", style=discord.ButtonStyle.success)
@@ -111,7 +144,7 @@ class ConfirmarCriacao(discord.ui.View):
         if not cog:
             await interaction.followup.send("O sistema de guildas está indisponível.", ephemeral=True)
             return
-        await cog.criar(interaction, self.nome)
+        await cog.criar(interaction, self.nome, self.cor)
 
     @discord.ui.button(label="Cancelar", style=discord.ButtonStyle.secondary)
     async def cancelar(self, interaction, button):
@@ -278,7 +311,7 @@ class MenuGuilda(discord.ui.Select):
             discord.SelectOption(label="Remover membro", value="remover", emoji="➖"),
             discord.SelectOption(label="Selecionar vice-líder", value="vice", emoji="🛡️"),
             discord.SelectOption(label="Transferir liderança", value="transferir", emoji="👑"),
-            discord.SelectOption(label="Editar nome e emoji", value="editar", emoji="✏️"),
+            discord.SelectOption(label="Editar nome, emoji e cor", value="editar", emoji="✏️"),
             discord.SelectOption(label="Apagar guilda", value="excluir", emoji="🗑️"),
         ])
 
@@ -291,7 +324,12 @@ class MenuGuilda(discord.ui.Select):
                 if not cog or not cog.eh_lider(interaction):
                     await interaction.response.send_message("Somente o líder pode editar a guilda.", ephemeral=True)
                     return
-                await interaction.response.send_modal(EditarGuilda())
+                dados = cog.dados.get(str(interaction.channel_id))
+                cargo = interaction.guild.get_role(dados["cargo"]) if dados else None
+                if not cargo:
+                    await interaction.response.send_message("Cargo da guilda não encontrado. Avise a equipe.", ephemeral=True)
+                    return
+                await interaction.response.send_modal(EditarGuilda(cargo))
             else:
                 await self.view.escolher(interaction, self.values[0])
         finally:
@@ -454,7 +492,7 @@ class Guildas(commands.Cog):
             self.dados.pop(str(canal_id), None)
             self.salvar()
 
-    async def criar(self, interaction, nome):
+    async def criar(self, interaction, nome, cor):
         guild = interaction.guild
         categoria = guild.get_channel(config.CATEGORIA_GUILDAS_ID)
         if not isinstance(categoria, discord.CategoryChannel):
@@ -464,9 +502,15 @@ class Guildas(commands.Cog):
             if self.lider_de_outra(guild.id, interaction.user.id):
                 await interaction.followup.send("Você já é líder de uma guilda.", ephemeral=True)
                 return
+            referencia = guild.get_role(config.CARGO_REFERENCIA_GUILDAS_ID)
+            if (not referencia or referencia.is_default() or not guild.me
+                    or referencia >= guild.me.top_role):
+                await interaction.followup.send("Configure um cargo de referência de guildas abaixo do cargo do bot. Avise a equipe.", ephemeral=True)
+                return
             cargo = canal = None
             try:
-                cargo = await guild.create_role(name=nome, reason=f"Guilda solicitada por {interaction.user.id}")
+                cargo = await guild.create_role(name=nome, colour=cor, hoist=True, reason=f"Guilda solicitada por {interaction.user.id}")
+                cargo = await cargo.edit(position=max(1, referencia.position - 1), reason="Posicionar abaixo do cargo de referência de guildas")
                 await interaction.user.add_roles(cargo, reason="Líder da guilda")
                 overwrites = {
                     guild.default_role: discord.PermissionOverwrite(view_channel=True, connect=False),
